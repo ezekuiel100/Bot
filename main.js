@@ -1,6 +1,5 @@
 const { DatabaseSync } = require('node:sqlite');
 const TelegramBot = require("node-telegram-bot-api")
-require("dotenv").config();
 
 const database = new DatabaseSync('/app/database.db');
 
