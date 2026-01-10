@@ -4,8 +4,8 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "dev": "node --watch main.js",
-    "start": "node --env-file=.env main.js"
+    "dev": "node --env-file=.env --watch main.js",
+    "start": "node main.js"
   },
   "keywords": [],
   "author": "",
