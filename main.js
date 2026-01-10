@@ -1,7 +1,7 @@
 const { DatabaseSync } = require('node:sqlite');
 const TelegramBot = require("node-telegram-bot-api")
 
-const database = new DatabaseSync('/app/database.db');
+const database = new DatabaseSync('./database.db');
 
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
 // const telegramBotToken = process.env.token;
@@ -56,7 +56,7 @@ bot.on("message", async (msg) => {
 
     DeleteforwardMessage(msg);
 
-    if (msg.text) {
+    if (msg?.text) {
         const data = database.prepare("SELECT * FROM proibidas").all()
         const text = msg.text.toLowerCase()
 
