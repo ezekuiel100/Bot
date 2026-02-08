@@ -1,3 +1,6 @@
+const { mkdirSync } = require('node:fs');
+mkdirSync('./data', { recursive: true });
+
 const { DatabaseSync } = require('node:sqlite');
 const TelegramBot = require("node-telegram-bot-api")
 
@@ -33,6 +36,8 @@ bot.onText(/\/banir (.+)/, async (msg, match) => {
             insert.run(palavra)
             console.log("Nova palavra proibida adicionada")
         } catch (err) {
+
+
             console.log(err.message)
         }
     }
