@@ -70,6 +70,8 @@ bot.on("message", async (msg) => {
                 console.log("Palavra proibida:", data[i].value)
                 console.log("Palavra proibida detectada:", text);
                 DeleteGroupMessage(msg, "MENSAGEM APAGADA!");
+                restrictChatMember(msg);
+
                 return
             }
         }
@@ -78,6 +80,7 @@ bot.on("message", async (msg) => {
 
     if (msg?.entities && msg.entities[0].type == "url") {
         DeleteGroupMessage(msg, linkAlert);
+        restrictChatMember(msg, 500000);
         return;
     }
 
@@ -87,6 +90,8 @@ bot.on("message", async (msg) => {
         msg.caption_entities[0]?.type == "url"
     ) {
         DeleteGroupMessage(msg, linkAlert);
+        restrictChatMember(msg, 500000);
+
         return;
     }
 
@@ -99,7 +104,6 @@ function DeleteGroupMessage(msg, alertText) {
 
             bot.sendMessage(msg.chat.id, alertText);
             bot.deleteMessage(msg.chat.id, msg.message_id);
-            restrictChatMember(msg);
         } catch (err) {
             console.log(err)
         }
@@ -115,12 +119,12 @@ async function GetGroupAdmins(msg) {
     }
 }
 
-function restrictChatMember(msg) {
-    let senconds = Math.floor(Date.now() / 1000);
+function restrictChatMember(msg, duration = 86400) {
+    let seconds = Math.floor(Date.now() / 1000);
 
     bot.restrictChatMember(msg.chat.id, msg.from.id, {
         can_send_messages: false,
-        until_date: senconds + 500000,
+        until_date: seconds + duration,
     });
 }
 
