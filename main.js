@@ -67,6 +67,8 @@ bot.on("message", async (msg) => {
     const data = database.prepare("SELECT * FROM proibidas").all();
     const text = msg.text.toLowerCase();
 
+    console.log("Data:", data);
+
     for (let i = 0; i < data.length; i++) {
       if (text.includes(data[i].value)) {
         console.log("Palavra proibida:", data[i].value);
