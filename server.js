@@ -17,6 +17,12 @@ fastify.register(cors, {
   origin: "*",
 });
 
+// Servir arquivos estáticos (caso tenha css, imagens, etc no futuro)
+fastify.register(require("@fastify/static"), {
+  root: __dirname, // mesma pasta dos arquivos
+  prefix: "/", // acessível na raiz
+});
+
 // Servir o frontend HTML
 fastify.get("/", async (request, reply) => {
   console.log("📄 Alguém acessou a raiz /");
@@ -29,11 +35,6 @@ fastify.get("/", async (request, reply) => {
       <p>Tente acessar: <a href="/gerenciador.html">/gerenciador.html</a></p>
     `);
   }
-});
-// Servir arquivos estáticos (caso tenha css, imagens, etc no futuro)
-fastify.register(require("@fastify/static"), {
-  root: __dirname, // mesma pasta dos arquivos
-  prefix: "/", // acessível na raiz
 });
 
 // ====================== ROTAS ======================
@@ -94,14 +95,12 @@ fastify.get("/palavras/count", async () => {
 });
 
 // ====================== INICIAR ======================
-const start = async () => {
-  try {
-    await fastify.listen({ port: 3333, host: "0.0.0.0" });
-    console.log("🚀 API Fastify rodando em http://localhost:3333");
-  } catch (err) {
+fastify.listen({ port: 3333, host: "0.0.0.0" }, (err, address) => {
+  if (err) {
     console.error(err);
     process.exit(1);
   }
-};
-
-start();
+  console.log(`🚀 Servidor rodando em ${address}`);
+  console.log(`🌐 Frontend: ${address}`);
+  console.log(`🌐 API: ${address}/palavras`);
+});
