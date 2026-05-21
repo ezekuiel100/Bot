@@ -20,6 +20,8 @@ database.exec(`CREATE TABLE IF NOT EXISTS proibidas (
 ) STRICT
 `);
 
+console.log("bot project");
+
 // Matches "/banir [palavra]"
 bot.onText(/\/banir (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
