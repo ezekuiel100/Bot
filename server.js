@@ -12,6 +12,17 @@ db.exec(`
   ) STRICT;
 `);
 
+// Servir o frontend HTML
+fastify.get("/", async (request, reply) => {
+  return reply.sendFile("index.html"); // ou index.html
+});
+
+// Servir arquivos estáticos (caso tenha css, imagens, etc no futuro)
+fastify.register(require("@fastify/static"), {
+  root: __dirname, // mesma pasta dos arquivos
+  prefix: "/", // acessível na raiz
+});
+
 // ====================== CORS ======================
 fastify.register(cors, {
   origin: "*",
