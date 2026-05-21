@@ -65,8 +65,6 @@ bot.on("message", async (msg) => {
     const data = database.prepare("SELECT * FROM proibidas").all();
     const text = msg.text.toLowerCase();
 
-    console.log("Data:", data);
-
     for (let i = 0; i < data.length; i++) {
       if (text.includes(data[i].value)) {
         console.log("Palavra proibida:", data[i].value);
@@ -101,7 +99,6 @@ function DeleteGroupMessage(msg, alertText) {
   GetGroupAdmins(msg).then((adm) => {
     try {
       if (adm.includes(msg.from.id) || msg.from.is_bot) return;
-      console.log("deletar mensagem");
       bot.sendMessage(msg.chat.id, alertText);
       bot.deleteMessage(msg.chat.id, msg.message_id);
     } catch (err) {
@@ -120,7 +117,6 @@ async function GetGroupAdmins(msg) {
 }
 
 function restrictChatMember(msg, duration = 86400) {
-  console.log("restringir menbro");
   let seconds = Math.floor(Date.now() / 1000);
 
   bot.restrictChatMember(msg.chat.id, msg.from.id, {
