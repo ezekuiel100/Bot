@@ -1,5 +1,5 @@
 const { mkdirSync } = require("node:fs");
-mkdirSync("./data", { recursive: true });
+mkdirSync("./data/", { recursive: true });
 
 const { DatabaseSync } = require("node:sqlite");
 const TelegramBot = require("node-telegram-bot-api");

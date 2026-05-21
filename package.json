@@ -4,17 +4,23 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "dev": "node --env-file=.env --watch main.js",
-    "start": "node main.js"
+    "dev": "concurrently \"node --env-file=.env --watch main.js\" \"node --env-file=.env server.js\"",
+    "start": "concurrently \"node main.js\" \"node server.js\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "fastify": "^5.8.5",
     "node-telegram-bot-api": "^0.67.0"
   },
   "engines": {
     "node": ">=24"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "pm2": "^7.0.1"
   }
 }
