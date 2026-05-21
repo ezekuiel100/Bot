@@ -12,6 +12,11 @@ db.exec(`
   ) STRICT;
 `);
 
+// ====================== CORS ======================
+fastify.register(cors, {
+  origin: "*",
+});
+
 // Servir o frontend HTML
 fastify.get("/", async (request, reply) => {
   return reply.sendFile("index.html"); // ou index.html
@@ -21,11 +26,6 @@ fastify.get("/", async (request, reply) => {
 fastify.register(require("@fastify/static"), {
   root: __dirname, // mesma pasta dos arquivos
   prefix: "/", // acessível na raiz
-});
-
-// ====================== CORS ======================
-fastify.register(cors, {
-  origin: "*",
 });
 
 // ====================== ROTAS ======================
