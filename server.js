@@ -19,9 +19,17 @@ fastify.register(cors, {
 
 // Servir o frontend HTML
 fastify.get("/", async (request, reply) => {
-  return reply.sendFile("index.html"); // ou index.html
+  console.log("📄 Alguém acessou a raiz /");
+  try {
+    return reply.sendFile("index.html"); // ← Mude aqui se o nome for diferente
+  } catch (err) {
+    console.error("❌ Erro ao enviar HTML:", err.message);
+    return reply.code(404).send(`
+      <h1>Arquivo HTML não encontrado</h1>
+      <p>Tente acessar: <a href="/gerenciador.html">/gerenciador.html</a></p>
+    `);
+  }
 });
-
 // Servir arquivos estáticos (caso tenha css, imagens, etc no futuro)
 fastify.register(require("@fastify/static"), {
   root: __dirname, // mesma pasta dos arquivos
