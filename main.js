@@ -22,10 +22,12 @@ const bot = new TelegramBot(telegramBotToken, { polling: true });
 bot.on("polling_error", (err) => console.error("Polling error:", err.message));
 
 let nsfwModel = null;
-nsfw.load().then((model) => {
-  nsfwModel = model;
-  console.log("Modelo NSFW carregado");
-}).catch((err) => console.error("Erro ao carregar modelo NSFW:", err.message));
+if (nsfw) {
+  nsfw.load().then((model) => {
+    nsfwModel = model;
+    console.log("Modelo NSFW carregado");
+  }).catch((err) => console.error("Erro ao carregar modelo NSFW:", err.message));
+}
 
 async function isNude(msg) {
   if (!nsfwModel || !msg.photo) return false;
