@@ -14,7 +14,7 @@ db.exec(`
 
 // ====================== CORS ======================
 fastify.register(cors, {
-  origin: "*",
+  origin: "http://tc0ccgks8swswkkccc0kwc8s.168.231.91.32.sslip.io",
 });
 
 // Servir arquivos estáticos (caso tenha css, imagens, etc no futuro)
