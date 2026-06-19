@@ -69,9 +69,11 @@ if (nsfw) {
 }
 
 async function isNude(msg) {
-  console.log("img 1");
-  if (!nsfwModel || !msg.photo) return false;
-  console.log("img 2");
+  if (!msg.photo) return false;
+  if (!nsfwModel) {
+    console.log("[NSFW] Modelo ainda não carregado, imagem ignorada.");
+    return false;
+  }
   try {
     const fileId = msg.photo.at(-1).file_id;
     const url = await bot.getFileLink(fileId);
@@ -189,8 +191,6 @@ bot.onText(/\/banir (.+)/, async (msg, match) => {
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const messageId = msg.message_id;
-
-  console.log("mensagem recieved");
 
   if (msg.new_chat_members) {
     bot.deleteMessage(chatId, messageId).catch((err) => {
