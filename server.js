@@ -1,3 +1,4 @@
+const path = require("node:path");
 const fastify = require("fastify")({ logger: true });
 const cors = require("@fastify/cors");
 const { DatabaseSync } = require("node:sqlite");
@@ -17,9 +18,9 @@ fastify.register(cors, {
   origin: "http://tc0ccgks8swswkkccc0kwc8s.168.231.91.32.sslip.io",
 });
 
-// Servir arquivos estáticos (caso tenha css, imagens, etc no futuro)
+// Servir arquivos estáticos apenas da pasta public/ (css, imagens, html)
 fastify.register(require("@fastify/static"), {
-  root: __dirname, // mesma pasta dos arquivos
+  root: path.join(__dirname, "public"), // só o que for público
   prefix: "/", // acessível na raiz
 });
 
