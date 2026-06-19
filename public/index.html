@@ -318,9 +318,8 @@
           tdUser.textContent = log.username || `#${log.user_id}`;
 
           const tdMsg = document.createElement("td");
-          tdMsg.className = "px-4 py-4 text-sm text-slate-400 max-w-xs truncate";
+          tdMsg.className = "px-4 py-4 text-sm text-slate-400 break-words max-w-sm";
           tdMsg.textContent = log.message_text || "—";
-          tdMsg.title = log.message_text || "";
 
           const tdAction = document.createElement("td");
           tdAction.className = "px-6 py-4 text-right";
