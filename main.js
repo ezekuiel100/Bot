@@ -11,6 +11,8 @@ const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
 
 const bot = new TelegramBot(telegramBotToken, { polling: true });
 
+bot.on("polling_error", (err) => console.error("Polling error:", err.message));
+
 let linkAlert = "PROIBIDO LINKS NO GRUPO!";
 let forwardMessageAlert = "PROIBIDO ENCAMINHA MENSAGEM";
 
@@ -97,14 +99,10 @@ bot.on("message", async (msg) => {
 
 function DeleteGroupMessage(msg, alertText) {
   GetGroupAdmins(msg).then((adm) => {
-    try {
-      if (adm.includes(msg.from.id) || msg.from.is_bot) return;
-      bot.sendMessage(msg.chat.id, alertText);
-      bot.deleteMessage(msg.chat.id, msg.message_id);
-    } catch (err) {
-      console.log(err);
-    }
-  });
+    if (adm.includes(msg.from.id) || msg.from.is_bot) return;
+    bot.sendMessage(msg.chat.id, alertText).catch((err) => console.error("Erro ao enviar alerta:", err.message));
+    bot.deleteMessage(msg.chat.id, msg.message_id).catch((err) => console.error("Erro ao apagar mensagem:", err.message));
+  }).catch((err) => console.error("Erro ao obter admins:", err.message));
 }
 
 async function GetGroupAdmins(msg) {
@@ -122,7 +120,7 @@ function restrictChatMember(msg, duration = 86400) {
   bot.restrictChatMember(msg.chat.id, msg.from.id, {
     can_send_messages: false,
     until_date: seconds + duration,
-  });
+  }).catch((err) => console.error("Erro ao restringir membro:", err.message));
 }
 
 function DeleteforwardMessage(msg) {
