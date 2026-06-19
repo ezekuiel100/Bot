@@ -123,6 +123,54 @@ fastify.delete("/logs", async () => {
   return { success: true, message: "Histórico limpo" };
 });
 
+// Remover restrição de um usuário via Telegram API
+fastify.post("/unrestrict", async (request, reply) => {
+  const { chat_id, user_id } = request.body;
+
+  if (!chat_id || !user_id) {
+    reply.code(400);
+    return { success: false, error: "chat_id e user_id são obrigatórios" };
+  }
+
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    reply.code(500);
+    return { success: false, error: "Token do bot não configurado no servidor" };
+  }
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/restrictChatMember`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id,
+        user_id,
+        permissions: {
+          can_send_messages: true,
+          can_send_audios: true,
+          can_send_documents: true,
+          can_send_photos: true,
+          can_send_videos: true,
+          can_send_video_notes: true,
+          can_send_voice_notes: true,
+          can_send_polls: true,
+          can_send_other_messages: true,
+          can_add_web_page_previews: true,
+        },
+      }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      reply.code(400);
+      return { success: false, error: data.description };
+    }
+    return { success: true, message: "Restrição removida com sucesso" };
+  } catch (err) {
+    reply.code(500);
+    return { success: false, error: err.message };
+  }
+});
+
 // ====================== INICIAR ======================
 fastify.listen({ port: 3333, host: "0.0.0.0" }, (err, address) => {
   if (err) {

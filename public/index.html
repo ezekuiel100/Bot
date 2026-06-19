@@ -131,6 +131,7 @@
                 <th class="text-left py-5 px-4 font-medium text-slate-400 w-44">TIPO</th>
                 <th class="text-left py-5 px-4 font-medium text-slate-400 w-36">USUÁRIO</th>
                 <th class="text-left py-5 px-4 font-medium text-slate-400">MENSAGEM</th>
+                <th class="text-right py-5 px-6 font-medium text-slate-400 w-44">AÇÕES</th>
               </tr>
             </thead>
             <tbody id="logList" class="divide-y divide-slate-700"></tbody>
@@ -288,7 +289,7 @@
         const tbody = document.getElementById("logList");
         tbody.innerHTML = "";
         if (logs.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="4" class="text-center py-16 text-slate-500">Nenhuma ação registrada</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="5" class="text-center py-16 text-slate-500">Nenhuma ação registrada</td></tr>`;
           return;
         }
         logs.forEach((log) => {
@@ -320,9 +321,42 @@
           tdMsg.textContent = log.message_text || "—";
           tdMsg.title = log.message_text || "";
 
-          row.append(tdTime, tdType, tdUser, tdMsg);
+          const tdAction = document.createElement("td");
+          tdAction.className = "px-6 py-4 text-right";
+          if (log.user_id && log.chat_id) {
+            const btn = document.createElement("button");
+            btn.className = "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 px-4 py-1.5 rounded-xl text-sm transition-all";
+            btn.innerHTML = '<i class="fas fa-lock-open mr-1"></i>Soltar';
+            btn.addEventListener("click", () => unrestrict(log.chat_id, log.user_id, log.username, btn));
+            tdAction.appendChild(btn);
+          }
+
+          row.append(tdTime, tdType, tdUser, tdMsg, tdAction);
           tbody.appendChild(row);
         });
+      }
+
+      async function unrestrict(chat_id, user_id, username, btn) {
+        const nome = username || `#${user_id}`;
+        if (!confirm(`Remover restrição de ${nome}?`)) return;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Aguarde';
+        try {
+          const res = await fetch(`${API_URL}/unrestrict`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id, user_id }),
+          });
+          const data = await res.json();
+          if (!data.success) { showToast(data.error || "Erro ao soltar usuário", "error"); btn.disabled = false; btn.innerHTML = '<i class="fas fa-lock-open mr-1"></i>Soltar'; return; }
+          showToast(`${nome} foi solto!`);
+          btn.className = "text-slate-500 text-sm px-4 py-1.5 cursor-default";
+          btn.innerHTML = '<i class="fas fa-check mr-1"></i>Solto';
+        } catch {
+          showToast("Erro de conexão com a API", "error");
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-lock-open mr-1"></i>Soltar';
+        }
       }
 
       async function clearLogs() {
