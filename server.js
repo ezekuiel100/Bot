@@ -6,10 +6,24 @@ const { DatabaseSync } = require("node:sqlite");
 // ====================== BANCO ======================
 const db = new DatabaseSync("/app/data/database.db");
 
+db.exec("PRAGMA journal_mode = WAL");
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS proibidas (
     key INTEGER PRIMARY KEY,
     value TEXT UNIQUE NOT NULL
+  ) STRICT;
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY,
+    timestamp INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    user_id INTEGER,
+    username TEXT,
+    message_text TEXT,
+    chat_id INTEGER
   ) STRICT;
 `);
 
@@ -93,6 +107,20 @@ fastify.delete("/palavras/:key", async (request, reply) => {
 fastify.get("/palavras/count", async () => {
   const stmt = db.prepare("SELECT COUNT(*) as total FROM proibidas");
   return stmt.get();
+});
+
+// ====================== LOGS ======================
+
+// Listar logs
+fastify.get("/logs", async () => {
+  const data = db.prepare("SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100").all();
+  return { success: true, total: data.length, data };
+});
+
+// Limpar logs
+fastify.delete("/logs", async () => {
+  db.prepare("DELETE FROM logs").run();
+  return { success: true, message: "Histórico limpo" };
 });
 
 // ====================== INICIAR ======================

@@ -36,11 +36,36 @@ function invalidateWordsCache() {
   wordsCacheExpiresAt = 0;
 }
 
+database.exec("PRAGMA journal_mode = WAL");
+
 database.exec(`CREATE TABLE IF NOT EXISTS proibidas (
   key INTEGER PRIMARY KEY,
   value TEXT UNIQUE
 ) STRICT
 `);
+
+database.exec(`CREATE TABLE IF NOT EXISTS logs (
+  id INTEGER PRIMARY KEY,
+  timestamp INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  user_id INTEGER,
+  username TEXT,
+  message_text TEXT,
+  chat_id INTEGER
+) STRICT
+`);
+
+function insertLog(action, msg) {
+  try {
+    const username = msg.from?.username || msg.from?.first_name || "desconhecido";
+    const text = (msg.text || msg.caption || "[mídia]").slice(0, 200);
+    database.prepare(
+      "INSERT INTO logs (timestamp, action, user_id, username, message_text, chat_id) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(Date.now(), action, msg.from?.id ?? null, username, text, msg.chat.id);
+  } catch (err) {
+    console.error("Erro ao inserir log:", err.message);
+  }
+}
 
 // Matches "/banir [palavra]"
 bot.onText(/\/banir (.+)/, async (msg, match) => {
@@ -91,6 +116,7 @@ bot.on("message", async (msg) => {
     for (const palavra of proibidas) {
       if (text.includes(palavra)) {
         console.log("Palavra proibida detectada:", palavra);
+        insertLog("palavra_proibida", msg);
         DeleteGroupMessage(msg, "MENSAGEM APAGADA!");
         restrictChatMember(msg);
         return;
@@ -99,6 +125,7 @@ bot.on("message", async (msg) => {
   }
 
   if (msg?.entities && msg.entities[0].type == "url") {
+    insertLog("link", msg);
     DeleteGroupMessage(msg, linkAlert);
     restrictChatMember(msg, 500000);
     return;
@@ -109,9 +136,9 @@ bot.on("message", async (msg) => {
     msg.caption_entities &&
     msg.caption_entities[0]?.type == "url"
   ) {
+    insertLog("link", msg);
     DeleteGroupMessage(msg, linkAlert);
     restrictChatMember(msg, 500000);
-
     return;
   }
 });
@@ -151,6 +178,7 @@ function restrictChatMember(msg, duration = 86400) {
 
 function DeleteforwardMessage(msg) {
   if (msg.forward_from_chat) {
+    insertLog("encaminhamento", msg);
     DeleteGroupMessage(msg, forwardMessageAlert);
   }
 }

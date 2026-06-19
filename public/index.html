@@ -3,185 +3,207 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gerenciador de Palavras Proibidas</title>
+    <title>Administração do Grupo</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
-    />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" />
     <style>
-      body {
-        background: linear-gradient(135deg, #0f172a, #1e2937);
-      }
-      tr:hover {
-        background-color: #1e2937;
-      }
+      body { background: linear-gradient(135deg, #0f172a, #1e2937); }
+      tr:hover { background-color: #1e2937; }
     </style>
   </head>
   <body class="min-h-screen text-white">
     <div class="max-w-4xl mx-auto p-6">
-      <div class="flex items-center justify-between mb-8">
+
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-4xl font-bold flex items-center gap-3">
-            <i class="fas fa-ban text-red-500"></i>
-            Palavras Proibidas
+            <i class="fas fa-shield-alt text-blue-500"></i>
+            Administração do Grupo
           </h1>
           <p class="text-slate-400 mt-1">Conectado à API Fastify + SQLite</p>
         </div>
-        <div class="flex items-center gap-3">
-          <button
-            onclick="loadWords()"
-            class="bg-slate-700 hover:bg-slate-600 px-5 py-2 rounded-2xl flex items-center gap-2 transition"
-          >
+        <div class="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-2xl text-sm flex items-center gap-2">
+          <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+          Online
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-2 mb-6">
+        <button id="tab-btn-palavras" onclick="switchTab('palavras')"
+          class="px-6 py-3 rounded-2xl font-semibold transition-all bg-red-600 text-white">
+          <i class="fas fa-ban mr-2"></i>Palavras Proibidas
+        </button>
+        <button id="tab-btn-logs" onclick="switchTab('logs')"
+          class="px-6 py-3 rounded-2xl font-semibold transition-all bg-slate-700 hover:bg-slate-600 text-slate-300">
+          <i class="fas fa-history mr-2"></i>Log de Ações
+        </button>
+      </div>
+
+      <!-- ========== TAB PALAVRAS ========== -->
+      <div id="section-palavras">
+
+        <!-- Stats -->
+        <div class="grid grid-cols-3 gap-4 mb-8">
+          <div class="bg-slate-800 rounded-2xl p-5">
+            <div class="text-slate-400 text-sm">Total de palavras</div>
+            <div id="totalCount" class="text-4xl font-bold mt-2">0</div>
+          </div>
+          <div class="bg-slate-800 rounded-2xl p-5 col-span-2 flex items-center">
+            <div class="text-slate-400">
+              API: <span class="font-mono text-emerald-400">http://localhost:3333</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add Form -->
+        <div class="bg-slate-800 rounded-3xl p-6 mb-8">
+          <div class="flex gap-4">
+            <input id="wordInput" type="text" placeholder="Digite a palavra ou frase proibida..."
+              class="flex-1 bg-slate-900 border border-slate-700 rounded-2xl px-6 py-4 focus:outline-none focus:border-red-500 text-lg"
+              onkeypress="if (event.key === 'Enter') addWord();" />
+            <button onclick="addWord()"
+              class="bg-red-600 hover:bg-red-700 px-10 rounded-2xl font-semibold text-lg transition-all flex items-center gap-3">
+              <i class="fas fa-plus"></i> BANIR
+            </button>
+          </div>
+        </div>
+
+        <!-- Search -->
+        <div class="flex justify-between items-center mb-4">
+          <div class="relative flex-1 max-w-xs">
+            <input id="searchInput" type="text" placeholder="Buscar palavra..."
+              class="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-3 pl-12 focus:outline-none focus:border-red-500"
+              onkeyup="filterTable()" />
+            <i class="fas fa-search absolute left-4 top-4 text-slate-500"></i>
+          </div>
+          <button onclick="loadWords()"
+            class="bg-slate-700 hover:bg-slate-600 px-5 py-3 rounded-2xl flex items-center gap-2 transition ml-4">
             <i class="fas fa-sync"></i> Atualizar
           </button>
-          <div
-            class="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-2xl text-sm flex items-center gap-2"
-          >
-            <div
-              class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"
-            ></div>
-            Online
+        </div>
+
+        <!-- Table -->
+        <div class="bg-slate-800 rounded-3xl overflow-hidden">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-slate-700">
+                <th class="text-left py-5 px-8 font-medium text-slate-400">PALAVRA / FRASE PROIBIDA</th>
+                <th class="text-right py-5 px-8 font-medium text-slate-400 w-40">AÇÕES</th>
+              </tr>
+            </thead>
+            <tbody id="wordList" class="divide-y divide-slate-700"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ========== TAB LOGS ========== -->
+      <div id="section-logs" class="hidden">
+
+        <!-- Stats -->
+        <div class="grid grid-cols-3 gap-4 mb-8">
+          <div class="bg-slate-800 rounded-2xl p-5">
+            <div class="text-slate-400 text-sm">Total de ações</div>
+            <div id="logCount" class="text-4xl font-bold mt-2">0</div>
+          </div>
+          <div class="bg-slate-800 rounded-2xl p-5 col-span-2 flex items-center justify-between">
+            <div class="text-slate-400 text-sm">Atualiza automaticamente a cada 30s</div>
+            <div class="flex gap-3">
+              <button onclick="loadLogs()"
+                class="bg-slate-700 hover:bg-slate-600 px-5 py-2 rounded-2xl flex items-center gap-2 transition text-sm">
+                <i class="fas fa-sync"></i> Atualizar
+              </button>
+              <button onclick="clearLogs()"
+                class="bg-red-500/10 hover:bg-red-500/20 text-red-400 px-5 py-2 rounded-2xl flex items-center gap-2 transition text-sm">
+                <i class="fas fa-trash"></i> Limpar
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Stats -->
-      <div class="grid grid-cols-3 gap-4 mb-8">
-        <div class="bg-slate-800 rounded-2xl p-5">
-          <div class="text-slate-400 text-sm">Total de palavras</div>
-          <div id="totalCount" class="text-4xl font-bold mt-2">0</div>
+        <!-- Log Table -->
+        <div class="bg-slate-800 rounded-3xl overflow-hidden">
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-slate-700">
+                <th class="text-left py-5 px-6 font-medium text-slate-400 w-40">HORA</th>
+                <th class="text-left py-5 px-4 font-medium text-slate-400 w-44">TIPO</th>
+                <th class="text-left py-5 px-4 font-medium text-slate-400 w-36">USUÁRIO</th>
+                <th class="text-left py-5 px-4 font-medium text-slate-400">MENSAGEM</th>
+              </tr>
+            </thead>
+            <tbody id="logList" class="divide-y divide-slate-700"></tbody>
+          </table>
         </div>
-        <div class="bg-slate-800 rounded-2xl p-5 col-span-2 flex items-center">
-          <div class="text-slate-400">
-            API:
-            <span class="font-mono text-emerald-400"
-              >http://localhost:3333</span
-            >
-          </div>
-        </div>
-      </div>
-
-      <!-- Add Form -->
-      <div class="bg-slate-800 rounded-3xl p-6 mb-8">
-        <div class="flex gap-4">
-          <input
-            id="wordInput"
-            type="text"
-            placeholder="Digite a palavra ou frase proibida..."
-            class="flex-1 bg-slate-900 border border-slate-700 rounded-2xl px-6 py-4 focus:outline-none focus:border-red-500 text-lg"
-            onkeypress="if (event.key === 'Enter') addWord();"
-          />
-          <button
-            onclick="addWord()"
-            class="bg-red-600 hover:bg-red-700 px-10 rounded-2xl font-semibold text-lg transition-all flex items-center gap-3"
-          >
-            <i class="fas fa-plus"></i>
-            BANIR
-          </button>
-        </div>
-      </div>
-
-      <!-- Search -->
-      <div class="flex justify-between items-center mb-4">
-        <div class="relative flex-1 max-w-xs">
-          <input
-            id="searchInput"
-            type="text"
-            placeholder="Buscar palavra..."
-            class="w-full bg-slate-800 border border-slate-700 rounded-2xl px-5 py-3 pl-12 focus:outline-none focus:border-red-500"
-            onkeyup="filterTable()"
-          />
-          <i class="fas fa-search absolute left-4 top-4 text-slate-500"></i>
-        </div>
-      </div>
-
-      <!-- Table -->
-      <div class="bg-slate-800 rounded-3xl overflow-hidden">
-        <table class="w-full">
-          <thead>
-            <tr class="border-b border-slate-700">
-              <th class="text-left py-5 px-8 font-medium text-slate-400">
-                PALAVRA / FRASE PROIBIDA
-              </th>
-              <th class="text-right py-5 px-8 font-medium text-slate-400 w-40">
-                AÇÕES
-              </th>
-            </tr>
-          </thead>
-          <tbody id="wordList" class="divide-y divide-slate-700"></tbody>
-        </table>
       </div>
 
       <div class="mt-8 text-center text-slate-500 text-sm">
-        Frontend conectado à API Fastify • Banco:
-        <span class="font-mono">proibidas</span>
+        Frontend conectado à API Fastify • Banco: <span class="font-mono">SQLite</span>
       </div>
     </div>
 
     <!-- Toast -->
-    <div
-      id="toast"
-      class="hidden fixed bottom-6 right-6 bg-slate-900 border border-emerald-500 text-emerald-400 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3"
-    >
+    <div id="toast"
+      class="hidden fixed bottom-6 right-6 bg-slate-900 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3">
       <i class="fas fa-check-circle"></i>
       <span id="toastText"></span>
     </div>
 
     <script>
       const API_URL = window.location.origin || "http://localhost:3333";
-
       let allWords = [];
+      let logsInterval = null;
 
-      // Mostrar toast
+      // ============ TOAST ============
       function showToast(message, type = "success") {
         const toast = document.getElementById("toast");
         const toastText = document.getElementById("toastText");
-
         toastText.textContent = message;
-        toast.className = `fixed bottom-6 right-6 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 transition-all ${
-          type === "error"
-            ? "border-red-500 text-red-400"
-            : "border-emerald-500 text-emerald-400"
+        toast.className = `fixed bottom-6 right-6 bg-slate-900 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 transition-all ${
+          type === "error" ? "border border-red-500 text-red-400" : "border border-emerald-500 text-emerald-400"
         }`;
-        toast.classList.remove("hidden");
-
-        setTimeout(() => toast.classList.add("hidden"), 3000);
+        setTimeout(() => toast.className += " hidden", 3000);
       }
 
-      // Carregar palavras
+      // ============ TABS ============
+      function switchTab(tab) {
+        ["palavras", "logs"].forEach((s) => {
+          document.getElementById(`section-${s}`).classList.toggle("hidden", s !== tab);
+          const btn = document.getElementById(`tab-btn-${s}`);
+          btn.className = s === tab
+            ? "px-6 py-3 rounded-2xl font-semibold transition-all bg-red-600 text-white"
+            : "px-6 py-3 rounded-2xl font-semibold transition-all bg-slate-700 hover:bg-slate-600 text-slate-300";
+        });
+
+        clearInterval(logsInterval);
+        if (tab === "logs") {
+          loadLogs();
+          logsInterval = setInterval(loadLogs, 30000);
+        }
+      }
+
+      // ============ PALAVRAS ============
       async function loadWords() {
         try {
           const res = await fetch(`${API_URL}/palavras`);
           const data = await res.json();
-
           if (!data.success) throw new Error(data.error);
-
           allWords = data.data;
           renderTable();
           document.getElementById("totalCount").textContent = data.total;
-        } catch (err) {
-          console.error(err);
-          showToast(
-            "Erro ao carregar palavras. Verifique se a API está rodando.",
-            "error",
-          );
+        } catch {
+          showToast("Erro ao carregar palavras. Verifique se a API está rodando.", "error");
         }
       }
 
-      // Renderizar tabela
       function renderTable(filteredWords = allWords) {
         const tbody = document.getElementById("wordList");
         tbody.innerHTML = "";
-
         if (filteredWords.length === 0) {
-          tbody.innerHTML = `
-          <tr><td colspan="2" class="text-center py-16 text-slate-500">
-            Nenhuma palavra encontrada
-          </td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="2" class="text-center py-16 text-slate-500">Nenhuma palavra encontrada</td></tr>`;
           return;
         }
-
         filteredWords.forEach((word) => {
           const row = document.createElement("tr");
           row.className = "group";
@@ -205,85 +227,119 @@
         });
       }
 
-      // Adicionar palavra
       async function addWord() {
         const input = document.getElementById("wordInput");
         const value = input.value.trim();
-
         if (!value) return;
-
         try {
           const res = await fetch(`${API_URL}/palavras`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ value }),
           });
-
           const data = await res.json();
-
-          if (!data.success) {
-            showToast(data.error || "Erro ao adicionar", "error");
-            return;
-          }
-
+          if (!data.success) { showToast(data.error || "Erro ao adicionar", "error"); return; }
           showToast(data.message);
           input.value = "";
-          loadWords(); // recarrega lista
-        } catch (err) {
+          loadWords();
+        } catch {
           showToast("Erro de conexão com a API", "error");
         }
       }
 
-      // Deletar palavra
       async function deleteWord(key) {
         if (!confirm("Tem certeza que deseja remover esta palavra?")) return;
-
         try {
-          const res = await fetch(`${API_URL}/palavras/${key}`, {
-            method: "DELETE",
-          });
-
+          const res = await fetch(`${API_URL}/palavras/${key}`, { method: "DELETE" });
           const data = await res.json();
-
-          if (!data.success) {
-            showToast(data.error || "Erro ao remover", "error");
-            return;
-          }
-
+          if (!data.success) { showToast(data.error || "Erro ao remover", "error"); return; }
           showToast(data.message);
           loadWords();
-        } catch (err) {
+        } catch {
           showToast("Erro de conexão com a API", "error");
         }
       }
 
-      // Filtrar em tempo real
       function filterTable() {
-        const search = document
-          .getElementById("searchInput")
-          .value.toLowerCase()
-          .trim();
-
-        if (!search) {
-          renderTable();
-          return;
-        }
-
-        const filtered = allWords.filter((word) =>
-          word.value.toLowerCase().includes(search),
-        );
-
-        renderTable(filtered);
+        const search = document.getElementById("searchInput").value.toLowerCase().trim();
+        renderTable(search ? allWords.filter((w) => w.value.toLowerCase().includes(search)) : allWords);
       }
 
-      // Inicialização
-      window.onload = () => {
-        loadWords();
-        console.log(
-          "%c✅ Frontend conectado à API Fastify!",
-          "color: #f43f5e; font-size: 14px;",
-        );
+      // ============ LOGS ============
+      const ACTION_META = {
+        palavra_proibida: { label: "Palavra proibida", color: "text-red-400 bg-red-500/10", icon: "fa-comment-slash" },
+        link:             { label: "Link",             color: "text-orange-400 bg-orange-500/10", icon: "fa-link" },
+        encaminhamento:   { label: "Encaminhamento",   color: "text-yellow-400 bg-yellow-500/10", icon: "fa-share" },
       };
+
+      async function loadLogs() {
+        try {
+          const res = await fetch(`${API_URL}/logs`);
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error);
+          renderLogs(data.data);
+          document.getElementById("logCount").textContent = data.total;
+        } catch {
+          showToast("Erro ao carregar logs.", "error");
+        }
+      }
+
+      function renderLogs(logs) {
+        const tbody = document.getElementById("logList");
+        tbody.innerHTML = "";
+        if (logs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="text-center py-16 text-slate-500">Nenhuma ação registrada</td></tr>`;
+          return;
+        }
+        logs.forEach((log) => {
+          const meta = ACTION_META[log.action] || { label: log.action, color: "text-slate-400 bg-slate-500/10", icon: "fa-circle" };
+          const time = new Date(log.timestamp).toLocaleString("pt-BR", {
+            day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+          });
+
+          const row = document.createElement("tr");
+
+          const tdTime = document.createElement("td");
+          tdTime.className = "px-6 py-4 text-sm text-slate-400 font-mono";
+          tdTime.textContent = time;
+
+          const tdType = document.createElement("td");
+          tdType.className = "px-4 py-4";
+          const badge = document.createElement("span");
+          badge.className = `${meta.color} px-3 py-1 rounded-xl text-sm font-medium`;
+          badge.innerHTML = `<i class="fas ${meta.icon} mr-1"></i>`;
+          badge.appendChild(document.createTextNode(meta.label));
+          tdType.appendChild(badge);
+
+          const tdUser = document.createElement("td");
+          tdUser.className = "px-4 py-4 text-sm text-slate-300";
+          tdUser.textContent = log.username || `#${log.user_id}`;
+
+          const tdMsg = document.createElement("td");
+          tdMsg.className = "px-4 py-4 text-sm text-slate-400 max-w-xs truncate";
+          tdMsg.textContent = log.message_text || "—";
+          tdMsg.title = log.message_text || "";
+
+          row.append(tdTime, tdType, tdUser, tdMsg);
+          tbody.appendChild(row);
+        });
+      }
+
+      async function clearLogs() {
+        if (!confirm("Limpar todo o histórico de ações?")) return;
+        try {
+          const res = await fetch(`${API_URL}/logs`, { method: "DELETE" });
+          const data = await res.json();
+          if (!data.success) { showToast(data.error || "Erro ao limpar", "error"); return; }
+          showToast("Histórico limpo!");
+          loadLogs();
+        } catch {
+          showToast("Erro de conexão com a API", "error");
+        }
+      }
+
+      // ============ INIT ============
+      window.onload = () => loadWords();
     </script>
   </body>
 </html>
