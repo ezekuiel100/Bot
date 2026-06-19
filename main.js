@@ -16,6 +16,26 @@ bot.on("polling_error", (err) => console.error("Polling error:", err.message));
 let linkAlert = "PROIBIDO LINKS NO GRUPO!";
 let forwardMessageAlert = "PROIBIDO ENCAMINHA MENSAGEM";
 
+// Cache de admins por grupo: chatId → { ids, expiresAt }
+const adminsCache = new Map();
+const ADMINS_TTL = 5 * 60 * 1000;
+
+// Cache de palavras proibidas
+let wordsCache = null;
+let wordsCacheExpiresAt = 0;
+const WORDS_TTL = 60 * 1000;
+
+function getProibidas() {
+  if (wordsCache && Date.now() < wordsCacheExpiresAt) return wordsCache;
+  wordsCache = database.prepare("SELECT value FROM proibidas").all().map((r) => r.value);
+  wordsCacheExpiresAt = Date.now() + WORDS_TTL;
+  return wordsCache;
+}
+
+function invalidateWordsCache() {
+  wordsCacheExpiresAt = 0;
+}
+
 database.exec(`CREATE TABLE IF NOT EXISTS proibidas (
   key INTEGER PRIMARY KEY,
   value TEXT UNIQUE
@@ -38,6 +58,7 @@ bot.onText(/\/banir (.+)/, async (msg, match) => {
         "INSERT INTO proibidas (value) VALUES (?)",
       );
       insert.run(palavra);
+      invalidateWordsCache();
       console.log("Nova palavra proibida adicionada");
     } catch (err) {
       console.log(err.message);
@@ -64,16 +85,14 @@ bot.on("message", async (msg) => {
   DeleteforwardMessage(msg);
 
   if (msg?.text) {
-    const data = database.prepare("SELECT * FROM proibidas").all();
+    const proibidas = getProibidas();
     const text = msg.text.toLowerCase();
 
-    for (let i = 0; i < data.length; i++) {
-      if (text.includes(data[i].value)) {
-        console.log("Palavra proibida:", data[i].value);
-        console.log("Palavra proibida detectada:", text);
+    for (const palavra of proibidas) {
+      if (text.includes(palavra)) {
+        console.log("Palavra proibida detectada:", palavra);
         DeleteGroupMessage(msg, "MENSAGEM APAGADA!");
         restrictChatMember(msg);
-
         return;
       }
     }
@@ -106,11 +125,18 @@ function DeleteGroupMessage(msg, alertText) {
 }
 
 async function GetGroupAdmins(msg) {
+  const chatId = msg.chat.id;
+  const cached = adminsCache.get(chatId);
+  if (cached && Date.now() < cached.expiresAt) return cached.ids;
+
   try {
-    let admin = await bot.getChatAdministrators(msg.chat.id);
-    return admin.map((adm) => adm.user.id);
+    const admins = await bot.getChatAdministrators(chatId);
+    const ids = admins.map((adm) => adm.user.id);
+    adminsCache.set(chatId, { ids, expiresAt: Date.now() + ADMINS_TTL });
+    return ids;
   } catch (error) {
-    console.log("Erro:" + error);
+    console.error("Erro ao obter admins:", error.message);
+    return cached?.ids ?? [];
   }
 }
 
