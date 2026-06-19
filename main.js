@@ -33,6 +33,7 @@ async function isNude(msg) {
     image.dispose();
     const porn = predictions.find((p) => p.className === "Porn")?.probability ?? 0;
     const hentai = predictions.find((p) => p.className === "Hentai")?.probability ?? 0;
+    console.log(`[NSFW] user=${msg.from?.username ?? msg.from?.id} porn=${(porn * 100).toFixed(1)}% hentai=${(hentai * 100).toFixed(1)}%`);
     return porn > 0.7 || hentai > 0.7;
   } catch (err) {
     console.error("Erro ao analisar imagem:", err.message);
