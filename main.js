@@ -28,7 +28,7 @@ const bot = new TelegramBot(telegramBotToken, { polling: true });
 bot.on("polling_error", (err) => console.error("Polling error:", err.message));
 
 const MODEL_DIR = "/app/data/nsfw_model";
-const MODEL_URL = "https://nsfwjs.com/quant_nsfw_mobilenet/";
+const MODEL_URL = "https://raw.githubusercontent.com/infinitered/nsfwjs/master/example/nsfw_demo/public/quant_nsfw_mobilenet/";
 
 async function downloadModelIfNeeded() {
   const modelJsonPath = path.join(MODEL_DIR, "model.json");
