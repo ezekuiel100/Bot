@@ -5,9 +5,14 @@ let tf = null;
 let nsfw = null;
 try {
   tf = require("@tensorflow/tfjs-node");
+  // Patch: re-adiciona isNullOrUndefined removido no TF.js 4.x (necessário pelo nsfwjs 2.4.2)
+  const utilBase = require("@tensorflow/tfjs-core/dist/util_base");
+  if (!utilBase.isNullOrUndefined) {
+    utilBase.isNullOrUndefined = (val) => val === null || val === undefined;
+  }
   nsfw = require("nsfwjs");
 } catch {
-  console.warn("NSFW detection indisponível neste ambiente (apenas Linux/produção).");
+  console.warn("NSFW detection indisponível neste ambiente.");
 }
 const { DatabaseSync } = require("node:sqlite");
 const TelegramBot = require("node-telegram-bot-api");
@@ -23,10 +28,15 @@ bot.on("polling_error", (err) => console.error("Polling error:", err.message));
 
 let nsfwModel = null;
 if (nsfw) {
-  nsfw.load().then((model) => {
-    nsfwModel = model;
-    console.log("Modelo NSFW carregado");
-  }).catch((err) => console.error("Erro ao carregar modelo NSFW:", err.message));
+  nsfw
+    .load()
+    .then((model) => {
+      nsfwModel = model;
+      console.log("Modelo NSFW carregado");
+    })
+    .catch((err) =>
+      console.error("Erro ao carregar modelo NSFW:", err.message),
+    );
 }
 
 async function isNude(msg) {
@@ -39,9 +49,13 @@ async function isNude(msg) {
     const image = tf.node.decodeImage(buffer, 3);
     const predictions = await nsfwModel.classify(image);
     image.dispose();
-    const porn = predictions.find((p) => p.className === "Porn")?.probability ?? 0;
-    const hentai = predictions.find((p) => p.className === "Hentai")?.probability ?? 0;
-    console.log(`[NSFW] user=${msg.from?.username ?? msg.from?.id} porn=${(porn * 100).toFixed(1)}% hentai=${(hentai * 100).toFixed(1)}%`);
+    const porn =
+      predictions.find((p) => p.className === "Porn")?.probability ?? 0;
+    const hentai =
+      predictions.find((p) => p.className === "Hentai")?.probability ?? 0;
+    console.log(
+      `[NSFW] user=${msg.from?.username ?? msg.from?.id} porn=${(porn * 100).toFixed(1)}% hentai=${(hentai * 100).toFixed(1)}%`,
+    );
     return porn > 0.7 || hentai > 0.7;
   } catch (err) {
     console.error("Erro ao analisar imagem:", err.message);
@@ -63,7 +77,10 @@ const WORDS_TTL = 60 * 1000;
 
 function getProibidas() {
   if (wordsCache && Date.now() < wordsCacheExpiresAt) return wordsCache;
-  wordsCache = database.prepare("SELECT value FROM proibidas").all().map((r) => r.value);
+  wordsCache = database
+    .prepare("SELECT value FROM proibidas")
+    .all()
+    .map((r) => r.value);
   wordsCacheExpiresAt = Date.now() + WORDS_TTL;
   return wordsCache;
 }
@@ -93,11 +110,21 @@ database.exec(`CREATE TABLE IF NOT EXISTS logs (
 
 function insertLog(action, msg) {
   try {
-    const username = msg.from?.username || msg.from?.first_name || "desconhecido";
+    const username =
+      msg.from?.username || msg.from?.first_name || "desconhecido";
     const text = (msg.text || msg.caption || "[mídia]").slice(0, 200);
-    database.prepare(
-      "INSERT INTO logs (timestamp, action, user_id, username, message_text, chat_id) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(Date.now(), action, msg.from?.id ?? null, username, text, msg.chat.id);
+    database
+      .prepare(
+        "INSERT INTO logs (timestamp, action, user_id, username, message_text, chat_id) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        Date.now(),
+        action,
+        msg.from?.id ?? null,
+        username,
+        text,
+        msg.chat.id,
+      );
   } catch (err) {
     console.error("Erro ao inserir log:", err.message);
   }
@@ -130,6 +157,8 @@ bot.onText(/\/banir (.+)/, async (msg, match) => {
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const messageId = msg.message_id;
+
+  console.log("mensagem recieved");
 
   if (msg.new_chat_members) {
     bot.deleteMessage(chatId, messageId).catch((err) => {
@@ -178,7 +207,7 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  if (msg.photo && await isNude(msg)) {
+  if (msg.photo && (await isNude(msg))) {
     insertLog("nude", msg);
     DeleteGroupMessage(msg, "IMAGEM INAPROPRIADA!");
     restrictChatMember(msg);
@@ -187,11 +216,17 @@ bot.on("message", async (msg) => {
 });
 
 function DeleteGroupMessage(msg, alertText) {
-  GetGroupAdmins(msg).then((adm) => {
-    if (adm.includes(msg.from.id) || msg.from.is_bot) return;
-    bot.sendMessage(msg.chat.id, alertText).catch((err) => console.error("Erro ao enviar alerta:", err.message));
-    bot.deleteMessage(msg.chat.id, msg.message_id).catch((err) => console.error("Erro ao apagar mensagem:", err.message));
-  }).catch((err) => console.error("Erro ao obter admins:", err.message));
+  GetGroupAdmins(msg)
+    .then((adm) => {
+      if (adm.includes(msg.from.id) || msg.from.is_bot) return;
+      bot
+        .sendMessage(msg.chat.id, alertText)
+        .catch((err) => console.error("Erro ao enviar alerta:", err.message));
+      bot
+        .deleteMessage(msg.chat.id, msg.message_id)
+        .catch((err) => console.error("Erro ao apagar mensagem:", err.message));
+    })
+    .catch((err) => console.error("Erro ao obter admins:", err.message));
 }
 
 async function GetGroupAdmins(msg) {
@@ -213,10 +248,12 @@ async function GetGroupAdmins(msg) {
 function restrictChatMember(msg, duration = 86400) {
   let seconds = Math.floor(Date.now() / 1000);
 
-  bot.restrictChatMember(msg.chat.id, msg.from.id, {
-    can_send_messages: false,
-    until_date: seconds + duration,
-  }).catch((err) => console.error("Erro ao restringir membro:", err.message));
+  bot
+    .restrictChatMember(msg.chat.id, msg.from.id, {
+      can_send_messages: false,
+      until_date: seconds + duration,
+    })
+    .catch((err) => console.error("Erro ao restringir membro:", err.message));
 }
 
 function DeleteforwardMessage(msg) {
