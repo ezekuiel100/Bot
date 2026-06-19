@@ -1,4 +1,5 @@
-const { mkdirSync } = require("node:fs");
+const { mkdirSync, existsSync, writeFileSync } = require("node:fs");
+const path = require("node:path");
 mkdirSync("./data/", { recursive: true });
 
 let tf = null;
@@ -26,17 +27,38 @@ const bot = new TelegramBot(telegramBotToken, { polling: true });
 
 bot.on("polling_error", (err) => console.error("Polling error:", err.message));
 
+const MODEL_DIR = "/app/data/nsfw_model";
+const MODEL_URL = "https://nsfwjs.com/quant_nsfw_mobilenet/";
+
+async function downloadModelIfNeeded() {
+  const modelJsonPath = path.join(MODEL_DIR, "model.json");
+  if (existsSync(modelJsonPath)) {
+    console.log("[NSFW] Modelo encontrado no cache, carregando...");
+    return;
+  }
+  console.log("[NSFW] Baixando modelo pela primeira vez...");
+  mkdirSync(MODEL_DIR, { recursive: true });
+  const modelJsonRes = await fetch(`${MODEL_URL}model.json`);
+  if (!modelJsonRes.ok) throw new Error(`HTTP ${modelJsonRes.status} ao baixar model.json`);
+  const modelJson = await modelJsonRes.json();
+  writeFileSync(modelJsonPath, JSON.stringify(modelJson));
+  for (const shard of modelJson.weightsManifest[0].paths) {
+    const shardRes = await fetch(`${MODEL_URL}${shard}`);
+    if (!shardRes.ok) throw new Error(`HTTP ${shardRes.status} ao baixar ${shard}`);
+    writeFileSync(path.join(MODEL_DIR, shard), Buffer.from(await shardRes.arrayBuffer()));
+  }
+  console.log("[NSFW] Modelo baixado com sucesso.");
+}
+
 let nsfwModel = null;
 if (nsfw) {
-  nsfw
-    .load()
+  downloadModelIfNeeded()
+    .then(() => nsfw.load(`file://${MODEL_DIR}/`))
     .then((model) => {
       nsfwModel = model;
-      console.log("Modelo NSFW carregado");
+      console.log("[NSFW] Modelo carregado e pronto.");
     })
-    .catch((err) =>
-      console.error("Erro ao carregar modelo NSFW:", err.message),
-    );
+    .catch((err) => console.error("[NSFW] Erro ao carregar modelo:", err.message));
 }
 
 async function isNude(msg) {
