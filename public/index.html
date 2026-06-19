@@ -185,15 +185,22 @@
         filteredWords.forEach((word) => {
           const row = document.createElement("tr");
           row.className = "group";
-          row.innerHTML = `
-          <td class="px-8 py-6 font-medium text-lg">${word.value}</td>
-          <td class="px-8 py-6 text-right">
-            <button onclick="deleteWord(${word.key})" 
-                    class="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-6 py-2 rounded-2xl transition-all opacity-0 group-hover:opacity-100">
-              <i class="fas fa-trash"></i> Remover
-            </button>
-          </td>
-        `;
+
+          const tdWord = document.createElement("td");
+          tdWord.className = "px-8 py-6 font-medium text-lg";
+          tdWord.textContent = word.value;
+
+          const tdAction = document.createElement("td");
+          tdAction.className = "px-8 py-6 text-right";
+
+          const btn = document.createElement("button");
+          btn.className = "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-6 py-2 rounded-2xl transition-all opacity-0 group-hover:opacity-100";
+          btn.addEventListener("click", () => deleteWord(word.key));
+          btn.innerHTML = '<i class="fas fa-trash"></i> Remover';
+
+          tdAction.appendChild(btn);
+          row.appendChild(tdWord);
+          row.appendChild(tdAction);
           tbody.appendChild(row);
         });
       }
