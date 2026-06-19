@@ -1,6 +1,8 @@
 const { mkdirSync } = require("node:fs");
 mkdirSync("./data/", { recursive: true });
 
+const tf = require("@tensorflow/tfjs-node");
+const nsfw = require("nsfwjs");
 const { DatabaseSync } = require("node:sqlite");
 const TelegramBot = require("node-telegram-bot-api");
 
@@ -12,6 +14,31 @@ const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
 const bot = new TelegramBot(telegramBotToken, { polling: true });
 
 bot.on("polling_error", (err) => console.error("Polling error:", err.message));
+
+let nsfwModel = null;
+nsfw.load().then((model) => {
+  nsfwModel = model;
+  console.log("Modelo NSFW carregado");
+}).catch((err) => console.error("Erro ao carregar modelo NSFW:", err.message));
+
+async function isNude(msg) {
+  if (!nsfwModel || !msg.photo) return false;
+  try {
+    const fileId = msg.photo.at(-1).file_id;
+    const url = await bot.getFileLink(fileId);
+    const res = await fetch(url);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const image = tf.node.decodeImage(buffer, 3);
+    const predictions = await nsfwModel.classify(image);
+    image.dispose();
+    const porn = predictions.find((p) => p.className === "Porn")?.probability ?? 0;
+    const hentai = predictions.find((p) => p.className === "Hentai")?.probability ?? 0;
+    return porn > 0.7 || hentai > 0.7;
+  } catch (err) {
+    console.error("Erro ao analisar imagem:", err.message);
+    return false;
+  }
+}
 
 let linkAlert = "PROIBIDO LINKS NO GRUPO!";
 let forwardMessageAlert = "PROIBIDO ENCAMINHA MENSAGEM";
@@ -139,6 +166,13 @@ bot.on("message", async (msg) => {
     insertLog("link", msg);
     DeleteGroupMessage(msg, linkAlert);
     restrictChatMember(msg, 500000);
+    return;
+  }
+
+  if (msg.photo && await isNude(msg)) {
+    insertLog("nude", msg);
+    DeleteGroupMessage(msg, "IMAGEM INAPROPRIADA!");
+    restrictChatMember(msg);
     return;
   }
 });
