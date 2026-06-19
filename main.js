@@ -39,13 +39,18 @@ async function downloadModelIfNeeded() {
   console.log("[NSFW] Baixando modelo pela primeira vez...");
   mkdirSync(MODEL_DIR, { recursive: true });
   const modelJsonRes = await fetch(`${MODEL_URL}model.json`);
-  if (!modelJsonRes.ok) throw new Error(`HTTP ${modelJsonRes.status} ao baixar model.json`);
+  if (!modelJsonRes.ok)
+    throw new Error(`HTTP ${modelJsonRes.status} ao baixar model.json`);
   const modelJson = await modelJsonRes.json();
   writeFileSync(modelJsonPath, JSON.stringify(modelJson));
   for (const shard of modelJson.weightsManifest[0].paths) {
     const shardRes = await fetch(`${MODEL_URL}${shard}`);
-    if (!shardRes.ok) throw new Error(`HTTP ${shardRes.status} ao baixar ${shard}`);
-    writeFileSync(path.join(MODEL_DIR, shard), Buffer.from(await shardRes.arrayBuffer()));
+    if (!shardRes.ok)
+      throw new Error(`HTTP ${shardRes.status} ao baixar ${shard}`);
+    writeFileSync(
+      path.join(MODEL_DIR, shard),
+      Buffer.from(await shardRes.arrayBuffer()),
+    );
   }
   console.log("[NSFW] Modelo baixado com sucesso.");
 }
@@ -58,17 +63,22 @@ if (nsfw) {
       nsfwModel = model;
       console.log("[NSFW] Modelo carregado e pronto.");
     })
-    .catch((err) => console.error("[NSFW] Erro ao carregar modelo:", err.message));
+    .catch((err) =>
+      console.error("[NSFW] Erro ao carregar modelo:", err.message),
+    );
 }
 
 async function isNude(msg) {
+  console.log("img 1");
   if (!nsfwModel || !msg.photo) return false;
+  console.log("img 2");
   try {
     const fileId = msg.photo.at(-1).file_id;
     const url = await bot.getFileLink(fileId);
     const res = await fetch(url);
     const buffer = Buffer.from(await res.arrayBuffer());
     const image = tf.node.decodeImage(buffer, 3);
+
     const predictions = await nsfwModel.classify(image);
     image.dispose();
     const porn =
