@@ -1,110 +1,20 @@
-const { mkdirSync, existsSync, writeFileSync } = require("node:fs");
-const path = require("node:path");
-mkdirSync("./data/", { recursive: true });
-
-let tf = null;
-let nsfw = null;
-try {
-  tf = require("@tensorflow/tfjs-node");
-  // Patch: re-adiciona isNullOrUndefined removido no TF.js 4.x (necessário pelo nsfwjs 2.4.2)
-  const utilBase = require("@tensorflow/tfjs-core/dist/util_base");
-  if (!utilBase.isNullOrUndefined) {
-    utilBase.isNullOrUndefined = (val) => val === null || val === undefined;
-  }
-  nsfw = require("nsfwjs");
-} catch {
-  console.warn("NSFW detection indisponível neste ambiente.");
-}
 const { DatabaseSync } = require("node:sqlite");
 const TelegramBot = require("node-telegram-bot-api");
 
 const database = new DatabaseSync("/app/data/database.db");
 
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
-// const telegramBotToken = process.env.token;
 
 const bot = new TelegramBot(telegramBotToken, { polling: true });
 
 bot.on("polling_error", (err) => console.error("Polling error:", err.message));
 
-const MODEL_DIR = "/app/data/nsfw_model";
-const MODEL_URL = "https://raw.githubusercontent.com/infinitered/nsfwjs/master/example/nsfw_demo/public/quant_nsfw_mobilenet/";
-
-async function downloadModelIfNeeded() {
-  const modelJsonPath = path.join(MODEL_DIR, "model.json");
-  if (existsSync(modelJsonPath)) {
-    console.log("[NSFW] Modelo encontrado no cache, carregando...");
-    return;
-  }
-  console.log("[NSFW] Baixando modelo pela primeira vez...");
-  mkdirSync(MODEL_DIR, { recursive: true });
-  const modelJsonRes = await fetch(`${MODEL_URL}model.json`);
-  if (!modelJsonRes.ok)
-    throw new Error(`HTTP ${modelJsonRes.status} ao baixar model.json`);
-  const modelJson = await modelJsonRes.json();
-  writeFileSync(modelJsonPath, JSON.stringify(modelJson));
-  for (const shard of modelJson.weightsManifest[0].paths) {
-    const shardRes = await fetch(`${MODEL_URL}${shard}`);
-    if (!shardRes.ok)
-      throw new Error(`HTTP ${shardRes.status} ao baixar ${shard}`);
-    writeFileSync(
-      path.join(MODEL_DIR, shard),
-      Buffer.from(await shardRes.arrayBuffer()),
-    );
-  }
-  console.log("[NSFW] Modelo baixado com sucesso.");
-}
-
-let nsfwModel = null;
-if (nsfw) {
-  downloadModelIfNeeded()
-    .then(() => nsfw.load(`file://${MODEL_DIR}/`))
-    .then((model) => {
-      nsfwModel = model;
-      console.log("[NSFW] Modelo carregado e pronto.");
-    })
-    .catch((err) =>
-      console.error("[NSFW] Erro ao carregar modelo:", err.message),
-    );
-}
-
-async function isNude(msg) {
-  if (!msg.photo) return false;
-  if (!nsfwModel) {
-    console.log("[NSFW] Modelo ainda não carregado, imagem ignorada.");
-    return false;
-  }
-  try {
-    const fileId = msg.photo.at(-1).file_id;
-    const url = await bot.getFileLink(fileId);
-    const res = await fetch(url);
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const image = tf.node.decodeImage(buffer, 3);
-
-    const predictions = await nsfwModel.classify(image);
-    image.dispose();
-    const porn =
-      predictions.find((p) => p.className === "Porn")?.probability ?? 0;
-    const hentai =
-      predictions.find((p) => p.className === "Hentai")?.probability ?? 0;
-    console.log(
-      `[NSFW] user=${msg.from?.username ?? msg.from?.id} porn=${(porn * 100).toFixed(1)}% hentai=${(hentai * 100).toFixed(1)}%`,
-    );
-    return porn > 0.7 || hentai > 0.7;
-  } catch (err) {
-    console.error("Erro ao analisar imagem:", err.message);
-    return false;
-  }
-}
-
 let linkAlert = "PROIBIDO LINKS NO GRUPO!";
 let forwardMessageAlert = "PROIBIDO ENCAMINHA MENSAGEM";
 
-// Cache de admins por grupo: chatId → { ids, expiresAt }
 const adminsCache = new Map();
 const ADMINS_TTL = 5 * 60 * 1000;
 
-// Cache de palavras proibidas
 let wordsCache = null;
 let wordsCacheExpiresAt = 0;
 const WORDS_TTL = 60 * 1000;
@@ -164,7 +74,6 @@ function insertLog(action, msg) {
   }
 }
 
-// Matches "/banir [palavra]"
 bot.onText(/\/banir (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
@@ -236,13 +145,6 @@ bot.on("message", async (msg) => {
     insertLog("link", msg);
     DeleteGroupMessage(msg, linkAlert);
     restrictChatMember(msg, 500000);
-    return;
-  }
-
-  if (msg.photo && (await isNude(msg))) {
-    insertLog("nude", msg);
-    DeleteGroupMessage(msg, "IMAGEM INAPROPRIADA!");
-    restrictChatMember(msg);
     return;
   }
 });
