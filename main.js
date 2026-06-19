@@ -1,8 +1,14 @@
 const { mkdirSync } = require("node:fs");
 mkdirSync("./data/", { recursive: true });
 
-const tf = require("@tensorflow/tfjs-node");
-const nsfw = require("nsfwjs");
+let tf = null;
+let nsfw = null;
+try {
+  tf = require("@tensorflow/tfjs-node");
+  nsfw = require("nsfwjs");
+} catch {
+  console.warn("NSFW detection indisponível neste ambiente (apenas Linux/produção).");
+}
 const { DatabaseSync } = require("node:sqlite");
 const TelegramBot = require("node-telegram-bot-api");
 
