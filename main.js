@@ -130,7 +130,7 @@ bot.on("message", async (msg) => {
     }
   }
 
-  if (msg?.entities && msg.entities[0].type == "url") {
+  if (msg?.entities && msg.entities[0]?.type == "url") {
     insertLog("link", msg);
     DeleteGroupMessage(msg, linkAlert);
     restrictChatMember(msg, 500000);
