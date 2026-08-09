@@ -115,12 +115,12 @@ bot.on("message", async (msg) => {
 
   DeleteforwardMessage(msg);
 
-  if (msg?.text) {
+  const content = (msg.text || msg.caption || "").toLowerCase();
+  if (content) {
     const proibidas = getProibidas();
-    const text = msg.text.toLowerCase();
 
     for (const palavra of proibidas) {
-      if (text.includes(palavra)) {
+      if (content.includes(palavra)) {
         console.log("Palavra proibida detectada:", palavra);
         insertLog("palavra_proibida", msg);
         DeleteGroupMessage(msg, "MENSAGEM APAGADA!");
