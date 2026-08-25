@@ -2,6 +2,7 @@ const path = require("node:path");
 const fastify = require("fastify")({ logger: true });
 const cors = require("@fastify/cors");
 const { DatabaseSync } = require("node:sqlite");
+const { normalizeFancyText } = require("./normalizeFancyText");
 
 // ====================== BANCO ======================
 const db = new DatabaseSync("/app/data/database.db");
@@ -72,7 +73,7 @@ fastify.post("/palavras", async (request, reply) => {
     return { success: false, error: "Valor é obrigatório" };
   }
 
-  const palavra = value.toLowerCase().trim();
+  const palavra = normalizeFancyText(value).trim();
 
   try {
     const insert = db.prepare("INSERT INTO proibidas (value) VALUES (?)");

@@ -1,5 +1,6 @@
 const { DatabaseSync } = require("node:sqlite");
 const TelegramBot = require("node-telegram-bot-api");
+const { normalizeFancyText } = require("./normalizeFancyText");
 
 const database = new DatabaseSync("/app/data/database.db");
 
@@ -77,7 +78,7 @@ function insertLog(action, msg) {
 bot.onText(/\/banir (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
-  const palavra = match[1].toLowerCase().trim();
+  const palavra = normalizeFancyText(match[1]).trim();
 
   const admins = await GetGroupAdmins(msg);
   const isAnonymousAdmin =
@@ -115,13 +116,14 @@ bot.on("message", async (msg) => {
 
   DeleteforwardMessage(msg);
 
-  const content = (msg.text || msg.caption || "").toLowerCase();
+  const content = normalizeFancyText(msg.text || msg.caption || "");
   if (content) {
     const proibidas = getProibidas();
 
     for (const palavra of proibidas) {
-      if (content.includes(palavra)) {
-        console.log("Palavra proibida detectada:", palavra);
+      const banned = normalizeFancyText(palavra);
+      if (banned && content.includes(banned)) {
+        console.log("Palavra proibida detectada:", banned);
         insertLog("palavra_proibida", msg);
         DeleteGroupMessage(msg, "MENSAGEM APAGADA!");
         restrictChatMember(msg);
@@ -130,24 +132,22 @@ bot.on("message", async (msg) => {
     }
   }
 
-  if (msg?.entities && msg.entities[0]?.type == "url") {
-    insertLog("link", msg);
-    DeleteGroupMessage(msg, linkAlert);
-    restrictChatMember(msg, 500000);
-    return;
-  }
-
-  if (
-    (msg.photo || msg.video) &&
-    msg.caption_entities &&
-    msg.caption_entities[0]?.type == "url"
-  ) {
+  if (messageHasLink(msg)) {
     insertLog("link", msg);
     DeleteGroupMessage(msg, linkAlert);
     restrictChatMember(msg, 500000);
     return;
   }
 });
+
+function messageHasLink(msg) {
+  const linkTypes = new Set(["url", "text_link"]);
+  const entities = [
+    ...(msg.entities || []),
+    ...(msg.caption_entities || []),
+  ];
+  return entities.some((entity) => linkTypes.has(entity.type));
+}
 
 function DeleteGroupMessage(msg, alertText) {
   GetGroupAdmins(msg)
