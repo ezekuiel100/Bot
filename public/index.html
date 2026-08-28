@@ -123,15 +123,15 @@
         </div>
 
         <!-- Log Table -->
-        <div class="bg-slate-800 rounded-3xl overflow-hidden">
-          <table class="w-full">
+        <div class="bg-slate-800 rounded-3xl overflow-x-auto">
+          <table class="w-full min-w-[900px]">
             <thead>
               <tr class="border-b border-slate-700">
-                <th class="text-left py-5 px-6 font-medium text-slate-400 w-40">HORA</th>
-                <th class="text-left py-5 px-4 font-medium text-slate-400 w-44">TIPO</th>
-                <th class="text-left py-5 px-4 font-medium text-slate-400 w-36">USUÁRIO</th>
+                <th class="text-left py-5 px-6 font-medium text-slate-400 w-32 shrink-0">HORA</th>
+                <th class="text-left py-5 px-4 font-medium text-slate-400 w-36 shrink-0">TIPO</th>
+                <th class="text-left py-5 px-4 font-medium text-slate-400 w-36 shrink-0">USUÁRIO</th>
                 <th class="text-left py-5 px-4 font-medium text-slate-400">MENSAGEM</th>
-                <th class="text-right py-5 px-6 font-medium text-slate-400 w-44">AÇÕES</th>
+                <th class="text-right py-5 px-6 font-medium text-slate-400 w-32 shrink-0">AÇÕES</th>
               </tr>
             </thead>
             <tbody id="logList" class="divide-y divide-slate-700"></tbody>
@@ -318,7 +318,7 @@
           tdUser.textContent = log.username || `#${log.user_id}`;
 
           const tdMsg = document.createElement("td");
-          tdMsg.className = "px-4 py-4 text-sm text-slate-400 break-words max-w-sm";
+          tdMsg.className = "px-4 py-4 text-sm text-slate-400 break-all min-w-0";
           tdMsg.textContent = log.message_text || "—";
 
           const tdAction = document.createElement("td");
