@@ -28,6 +28,17 @@ db.exec(`
   ) STRICT;
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS restricoes (
+    id INTEGER PRIMARY KEY,
+    timestamp INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    username TEXT,
+    reason TEXT NOT NULL,
+    chat_id INTEGER NOT NULL
+  ) STRICT;
+`);
+
 // ====================== CORS ======================
 fastify.register(cors, {
   origin: "http://tc0ccgks8swswkkccc0kwc8s.168.231.91.32.sslip.io",
@@ -122,6 +133,16 @@ fastify.get("/logs", async () => {
 fastify.delete("/logs", async () => {
   db.prepare("DELETE FROM logs").run();
   return { success: true, message: "Histórico limpo" };
+});
+
+// Histórico de restrições aplicadas pelo bot
+fastify.get("/restricoes", async () => {
+  const data = db
+    .prepare(
+      "SELECT id, timestamp, user_id, username, reason, chat_id FROM restricoes ORDER BY timestamp DESC LIMIT 100",
+    )
+    .all();
+  return { success: true, total: data.length, data };
 });
 
 // Remover restrição de um usuário via Telegram API

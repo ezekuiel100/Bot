@@ -39,6 +39,10 @@
           class="px-6 py-3 rounded-2xl font-semibold transition-all bg-slate-700 hover:bg-slate-600 text-slate-300">
           <i class="fas fa-history mr-2"></i>Log de Ações
         </button>
+        <button id="tab-btn-restricoes" onclick="switchTab('restricoes')"
+          class="px-6 py-3 rounded-2xl font-semibold transition-all bg-slate-700 hover:bg-slate-600 text-slate-300">
+          <i class="fas fa-user-lock mr-2"></i>Restrições
+        </button>
       </div>
 
       <!-- ========== TAB PALAVRAS ========== -->
@@ -139,6 +143,26 @@
         </div>
       </div>
 
+      <!-- ========== TAB RESTRIÇÕES ========== -->
+      <div id="section-restricoes" class="hidden">
+        <div class="grid grid-cols-3 gap-4 mb-8">
+          <div class="bg-slate-800 rounded-2xl p-5">
+            <div class="text-slate-400 text-sm">Total de restrições</div>
+            <div id="restrictionCount" class="text-4xl font-bold mt-2">0</div>
+          </div>
+          <div class="bg-slate-800 rounded-2xl p-5 col-span-2 flex items-center justify-between">
+            <div class="text-slate-400 text-sm">Últimas 100 restrições aplicadas</div>
+            <button onclick="loadRestrictions()" class="bg-slate-700 hover:bg-slate-600 px-5 py-2 rounded-2xl flex items-center gap-2 transition text-sm"><i class="fas fa-sync"></i> Atualizar</button>
+          </div>
+        </div>
+        <div class="bg-slate-800 rounded-3xl overflow-x-auto">
+          <table class="w-full min-w-[850px]">
+            <thead><tr class="border-b border-slate-700"><th class="text-left py-5 px-6 font-medium text-slate-400">DATA</th><th class="text-left py-5 px-4 font-medium text-slate-400">USUÁRIO</th><th class="text-left py-5 px-4 font-medium text-slate-400">MOTIVO</th><th class="text-left py-5 px-4 font-medium text-slate-400">GRUPO</th><th class="text-right py-5 px-6 font-medium text-slate-400">AÇÃO</th></tr></thead>
+            <tbody id="restrictionList" class="divide-y divide-slate-700"></tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="mt-8 text-center text-slate-500 text-sm">
         Frontend conectado à API Fastify • Banco: <span class="font-mono">SQLite</span>
       </div>
@@ -169,7 +193,7 @@
 
       // ============ TABS ============
       function switchTab(tab) {
-        ["palavras", "logs"].forEach((s) => {
+        ["palavras", "logs", "restricoes"].forEach((s) => {
           document.getElementById(`section-${s}`).classList.toggle("hidden", s !== tab);
           const btn = document.getElementById(`tab-btn-${s}`);
           btn.className = s === tab
@@ -182,6 +206,7 @@
           loadLogs();
           logsInterval = setInterval(loadLogs, 30000);
         }
+        if (tab === "restricoes") loadRestrictions();
       }
 
       // ============ PALAVRAS ============
@@ -334,6 +359,40 @@
           row.append(tdTime, tdType, tdUser, tdMsg, tdAction);
           tbody.appendChild(row);
         });
+      }
+
+      // ============ RESTRIÇÕES ============
+      async function loadRestrictions() {
+        try {
+          const res = await fetch(`${API_URL}/restricoes`);
+          const data = await res.json();
+          if (!data.success) throw new Error(data.error);
+          document.getElementById("restrictionCount").textContent = data.total;
+          const tbody = document.getElementById("restrictionList");
+          tbody.innerHTML = "";
+          if (data.data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-16 text-slate-500">Nenhuma restrição registrada</td></tr>`;
+            return;
+          }
+          data.data.forEach((restriction) => {
+            const row = document.createElement("tr");
+            const time = new Date(restriction.timestamp).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+            row.innerHTML = `<td class="px-6 py-4 text-sm text-slate-400 font-mono"></td><td class="px-4 py-4 text-slate-300"></td><td class="px-4 py-4 text-sm text-orange-300"></td><td class="px-4 py-4 text-sm text-slate-400 font-mono"></td><td class="px-6 py-4 text-right"></td>`;
+            const cells = row.querySelectorAll("td");
+            cells[0].textContent = time;
+            cells[1].textContent = restriction.username || `#${restriction.user_id}`;
+            cells[2].textContent = restriction.reason;
+            cells[3].textContent = restriction.chat_id;
+            const button = document.createElement("button");
+            button.className = "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-4 py-1.5 rounded-xl text-sm transition-all";
+            button.innerHTML = '<i class="fas fa-lock-open mr-1"></i>Soltar';
+            button.addEventListener("click", () => unrestrict(restriction.chat_id, restriction.user_id, restriction.username, button));
+            cells[4].appendChild(button);
+            tbody.appendChild(row);
+          });
+        } catch {
+          showToast("Erro ao carregar restrições.", "error");
+        }
       }
 
       async function unrestrict(chat_id, user_id, username, btn) {
