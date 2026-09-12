@@ -53,6 +53,16 @@ database.exec(`CREATE TABLE IF NOT EXISTS logs (
 ) STRICT
 `);
 
+database.exec(`CREATE TABLE IF NOT EXISTS restricoes (
+  id INTEGER PRIMARY KEY,
+  timestamp INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  username TEXT,
+  reason TEXT NOT NULL,
+  chat_id INTEGER NOT NULL
+) STRICT
+`);
+
 function insertLog(action, msg) {
   try {
     const username =
@@ -126,7 +136,7 @@ bot.on("message", async (msg) => {
         console.log("Palavra proibida detectada:", banned);
         insertLog("palavra_proibida", msg);
         DeleteGroupMessage(msg, "MENSAGEM APAGADA!");
-        restrictChatMember(msg);
+        restrictChatMember(msg, 86400, `Palavra proibida: ${banned}`);
         return;
       }
     }
@@ -135,7 +145,7 @@ bot.on("message", async (msg) => {
   if (messageHasLink(msg)) {
     insertLog("link", msg);
     DeleteGroupMessage(msg, linkAlert);
-    restrictChatMember(msg, 500000);
+    restrictChatMember(msg, 500000, "Envio de link proibido");
     return;
   }
 });
@@ -179,13 +189,22 @@ async function GetGroupAdmins(msg) {
   }
 }
 
-function restrictChatMember(msg, duration = 86400) {
-  let seconds = Math.floor(Date.now() / 1000);
+function restrictChatMember(msg, duration = 86400, reason = "Motivo não informado") {
+  const seconds = Math.floor(Date.now() / 1000);
 
   bot
     .restrictChatMember(msg.chat.id, msg.from.id, {
       can_send_messages: false,
       until_date: seconds + duration,
+    })
+    .then(() => {
+      const username =
+        msg.from?.username || msg.from?.first_name || "desconhecido";
+      database
+        .prepare(
+          "INSERT INTO restricoes (timestamp, user_id, username, reason, chat_id) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(Date.now(), msg.from.id, username, reason, msg.chat.id);
     })
     .catch((err) => console.error("Erro ao restringir membro:", err.message));
 }
