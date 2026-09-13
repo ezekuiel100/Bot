@@ -128,14 +128,14 @@
 
         <!-- Log Table -->
         <div class="bg-slate-800 rounded-3xl overflow-x-auto">
-          <table class="w-full min-w-[900px]">
+          <table class="w-full min-w-[1080px]">
             <thead>
               <tr class="border-b border-slate-700">
                 <th class="text-left py-5 px-6 font-medium text-slate-400 w-32 shrink-0">HORA</th>
                 <th class="text-left py-5 px-4 font-medium text-slate-400 w-36 shrink-0">TIPO</th>
                 <th class="text-left py-5 px-4 font-medium text-slate-400 w-36 shrink-0">USUÁRIO</th>
                 <th class="text-left py-5 px-4 font-medium text-slate-400">MENSAGEM</th>
-                <th class="text-right py-5 px-6 font-medium text-slate-400 w-32 shrink-0">AÇÕES</th>
+                <th class="text-right py-5 px-6 font-medium text-slate-400 w-60 shrink-0">AÇÕES</th>
               </tr>
             </thead>
             <tbody id="logList" class="divide-y divide-slate-700"></tbody>
@@ -347,7 +347,7 @@
           tdMsg.textContent = log.message_text || "—";
 
           const tdAction = document.createElement("td");
-          tdAction.className = "px-6 py-4 text-right";
+          tdAction.className = "px-6 py-4 text-right w-60";
           if (log.user_id && log.chat_id) {
             const actions = document.createElement("div");
             actions.className = "flex justify-end gap-2";
