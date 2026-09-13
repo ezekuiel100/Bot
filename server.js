@@ -145,6 +145,38 @@ fastify.get("/restricoes", async () => {
   return { success: true, total: data.length, data };
 });
 
+// Banir permanentemente um usuário via Telegram API
+fastify.post("/ban", async (request, reply) => {
+  const { chat_id, user_id } = request.body;
+  if (!chat_id || !user_id) {
+    reply.code(400);
+    return { success: false, error: "chat_id e user_id são obrigatórios" };
+  }
+
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    reply.code(500);
+    return { success: false, error: "Token do bot não configurado no servidor" };
+  }
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/banChatMember`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id, user_id }),
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      reply.code(400);
+      return { success: false, error: data.description };
+    }
+    return { success: true, message: "Usuário banido com sucesso" };
+  } catch (err) {
+    reply.code(500);
+    return { success: false, error: err.message };
+  }
+});
+
 // Remover restrição de um usuário via Telegram API
 fastify.post("/unrestrict", async (request, reply) => {
   const { chat_id, user_id } = request.body;

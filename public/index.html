@@ -349,11 +349,21 @@
           const tdAction = document.createElement("td");
           tdAction.className = "px-6 py-4 text-right";
           if (log.user_id && log.chat_id) {
-            const btn = document.createElement("button");
-            btn.className = "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 px-4 py-1.5 rounded-xl text-sm transition-all";
-            btn.innerHTML = '<i class="fas fa-lock-open mr-1"></i>Soltar';
-            btn.addEventListener("click", () => unrestrict(log.chat_id, log.user_id, log.username, btn));
-            tdAction.appendChild(btn);
+            const actions = document.createElement("div");
+            actions.className = "flex justify-end gap-2";
+
+            const releaseButton = document.createElement("button");
+            releaseButton.className = "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 hover:text-emerald-300 px-4 py-1.5 rounded-xl text-sm transition-all";
+            releaseButton.innerHTML = '<i class="fas fa-lock-open mr-1"></i>Soltar';
+            releaseButton.addEventListener("click", () => unrestrict(log.chat_id, log.user_id, log.username, releaseButton));
+
+            const banButton = document.createElement("button");
+            banButton.className = "bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-4 py-1.5 rounded-xl text-sm transition-all";
+            banButton.innerHTML = '<i class="fas fa-user-slash mr-1"></i>Banir';
+            banButton.addEventListener("click", () => banUser(log.chat_id, log.user_id, log.username, banButton));
+
+            actions.append(releaseButton, banButton);
+            tdAction.appendChild(actions);
           }
 
           row.append(tdTime, tdType, tdUser, tdMsg, tdAction);
@@ -392,6 +402,34 @@
           });
         } catch {
           showToast("Erro ao carregar restrições.", "error");
+        }
+      }
+
+      async function banUser(chat_id, user_id, username, btn) {
+        const nome = username || `#${user_id}`;
+        if (!confirm(`Banir permanentemente ${nome} do grupo?`)) return;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>Aguarde';
+        try {
+          const res = await fetch(`${API_URL}/ban`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id, user_id }),
+          });
+          const data = await res.json();
+          if (!data.success) {
+            showToast(data.error || "Erro ao banir usuário", "error");
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-user-slash mr-1"></i>Banir';
+            return;
+          }
+          showToast(`${nome} foi banido!`);
+          btn.className = "text-slate-500 text-sm px-4 py-1.5 cursor-default";
+          btn.innerHTML = '<i class="fas fa-check mr-1"></i>Banido';
+        } catch {
+          showToast("Erro de conexão com a API", "error");
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-user-slash mr-1"></i>Banir';
         }
       }
 
