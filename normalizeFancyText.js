@@ -79,27 +79,43 @@ function compactForWordMatch(text) {
 
 const MIN_BANNED_WORD_LENGTH = 2;
 
-function escapeRegex(char) {
-  return char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function messageTokens(text) {
+  return normalizeFancyText(text)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
 }
 
-/** Sequência da palavra, com ou sem separadores entre letras; não vale dentro de outra palavra. */
-function matchesIsolatedSequence(normalized, banned) {
-  const notAlnum = "[^\\p{L}\\p{N}]";
-  const chars = [...banned].map(escapeRegex);
-  const pattern = new RegExp(
-    `(?:^|${notAlnum})${chars.join(`${notAlnum}*`)}(?:${notAlnum}|$)`,
-    "u",
-  );
-  return pattern.test(normalized);
+function joinedSingleLetterRuns(tokens) {
+  const runs = [];
+  let run = "";
+  const flush = () => {
+    if (run.length >= MIN_BANNED_WORD_LENGTH) runs.push(run);
+    run = "";
+  };
+  for (const tok of tokens) {
+    if (tok.length === 1) run += tok;
+    else flush();
+  }
+  flush();
+  return runs;
 }
 
 function matchesBannedWord(text, palavra) {
   const banned = compactForWordMatch(palavra);
   if (!banned || banned.length < MIN_BANNED_WORD_LENGTH) return null;
-  return matchesIsolatedSequence(normalizeFancyText(text), banned)
-    ? banned
-    : null;
+
+  const tokens = messageTokens(text);
+  if (tokens.some((tok) => tok === banned)) return banned;
+
+  if (joinedSingleLetterRuns(tokens).some((run) => run.includes(banned))) {
+    return banned;
+  }
+
+  if (banned.length >= 4 && tokens.some((tok) => tok.includes(banned))) {
+    return banned;
+  }
+
+  return null;
 }
 
 module.exports = {
