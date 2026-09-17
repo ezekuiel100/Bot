@@ -77,4 +77,18 @@ function compactForWordMatch(text) {
   return normalizeFancyText(text).replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
-module.exports = { normalizeFancyText, compactForWordMatch };
+const MIN_BANNED_WORD_LENGTH = 3;
+
+function matchesBannedWord(text, palavra) {
+  const banned = compactForWordMatch(palavra);
+  if (!banned || banned.length < MIN_BANNED_WORD_LENGTH) return null;
+  if (!compactForWordMatch(text).includes(banned)) return null;
+  return banned;
+}
+
+module.exports = {
+  normalizeFancyText,
+  compactForWordMatch,
+  matchesBannedWord,
+  MIN_BANNED_WORD_LENGTH,
+};

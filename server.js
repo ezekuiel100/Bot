@@ -2,7 +2,11 @@ const path = require("node:path");
 const fastify = require("fastify")({ logger: true });
 const cors = require("@fastify/cors");
 const { DatabaseSync } = require("node:sqlite");
-const { normalizeFancyText } = require("./normalizeFancyText");
+const {
+  normalizeFancyText,
+  compactForWordMatch,
+  MIN_BANNED_WORD_LENGTH,
+} = require("./normalizeFancyText");
 
 // ====================== BANCO ======================
 const db = new DatabaseSync("/app/data/database.db");
@@ -85,6 +89,13 @@ fastify.post("/palavras", async (request, reply) => {
   }
 
   const palavra = normalizeFancyText(value).trim();
+  if (compactForWordMatch(palavra).length < MIN_BANNED_WORD_LENGTH) {
+    reply.code(400);
+    return {
+      success: false,
+      error: `Use pelo menos ${MIN_BANNED_WORD_LENGTH} letras ou números`,
+    };
+  }
 
   try {
     const insert = db.prepare("INSERT INTO proibidas (value) VALUES (?)");

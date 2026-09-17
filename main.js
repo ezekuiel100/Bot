@@ -1,6 +1,11 @@
 const { DatabaseSync } = require("node:sqlite");
 const TelegramBot = require("node-telegram-bot-api");
-const { normalizeFancyText, compactForWordMatch } = require("./normalizeFancyText");
+const {
+  normalizeFancyText,
+  compactForWordMatch,
+  matchesBannedWord,
+  MIN_BANNED_WORD_LENGTH,
+} = require("./normalizeFancyText");
 
 const database = new DatabaseSync("/app/data/database.db");
 
@@ -89,6 +94,9 @@ bot.onText(/\/banir (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const palavra = normalizeFancyText(match[1]).trim();
+  if (compactForWordMatch(palavra).length < MIN_BANNED_WORD_LENGTH) {
+    return;
+  }
 
   const admins = await GetGroupAdmins(msg);
   const isAnonymousAdmin =
@@ -127,13 +135,12 @@ bot.on("message", async (msg) => {
   DeleteforwardMessage(msg);
 
   const rawContent = msg.text || msg.caption || "";
-  const content = compactForWordMatch(rawContent);
-  if (content) {
+  if (rawContent) {
     const proibidas = getProibidas();
 
     for (const palavra of proibidas) {
-      const banned = compactForWordMatch(palavra);
-      if (banned && content.includes(banned)) {
+      const banned = matchesBannedWord(rawContent, palavra);
+      if (banned) {
         console.log("Palavra proibida detectada:", banned);
         insertLog("palavra_proibida", msg);
         DeleteGroupMessage(msg, "MENSAGEM APAGADA!");
