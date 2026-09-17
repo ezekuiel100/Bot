@@ -77,13 +77,29 @@ function compactForWordMatch(text) {
   return normalizeFancyText(text).replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
-const MIN_BANNED_WORD_LENGTH = 3;
+const MIN_BANNED_WORD_LENGTH = 2;
+
+function escapeRegex(char) {
+  return char.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Sequência da palavra, com ou sem separadores entre letras; não vale dentro de outra palavra. */
+function matchesIsolatedSequence(normalized, banned) {
+  const notAlnum = "[^\\p{L}\\p{N}]";
+  const chars = [...banned].map(escapeRegex);
+  const pattern = new RegExp(
+    `(?:^|${notAlnum})${chars.join(`${notAlnum}*`)}(?:${notAlnum}|$)`,
+    "u",
+  );
+  return pattern.test(normalized);
+}
 
 function matchesBannedWord(text, palavra) {
   const banned = compactForWordMatch(palavra);
   if (!banned || banned.length < MIN_BANNED_WORD_LENGTH) return null;
-  if (!compactForWordMatch(text).includes(banned)) return null;
-  return banned;
+  return matchesIsolatedSequence(normalizeFancyText(text), banned)
+    ? banned
+    : null;
 }
 
 module.exports = {
