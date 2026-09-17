@@ -4,7 +4,7 @@ const {
   normalizeFancyText,
   compactForWordMatch,
   matchesBannedWord,
-  MIN_BANNED_WORD_LENGTH,
+  isUsableBannedCompact,
 } = require("./normalizeFancyText");
 
 const database = new DatabaseSync("/app/data/database.db");
@@ -94,7 +94,7 @@ bot.onText(/\/banir (.+)/, async (msg, match) => {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
   const palavra = normalizeFancyText(match[1]).trim();
-  if (compactForWordMatch(palavra).length < MIN_BANNED_WORD_LENGTH) {
+  if (!isUsableBannedCompact(compactForWordMatch(palavra))) {
     return;
   }
 

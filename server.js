@@ -5,7 +5,7 @@ const { DatabaseSync } = require("node:sqlite");
 const {
   normalizeFancyText,
   compactForWordMatch,
-  MIN_BANNED_WORD_LENGTH,
+  isUsableBannedCompact,
 } = require("./normalizeFancyText");
 
 // ====================== BANCO ======================
@@ -89,11 +89,11 @@ fastify.post("/palavras", async (request, reply) => {
   }
 
   const palavra = normalizeFancyText(value).trim();
-  if (compactForWordMatch(palavra).length < MIN_BANNED_WORD_LENGTH) {
+  if (!isUsableBannedCompact(compactForWordMatch(palavra))) {
     reply.code(400);
     return {
       success: false,
-      error: `Use pelo menos ${MIN_BANNED_WORD_LENGTH} letras ou números`,
+      error: "Use pelo menos 2 letras/números, ou um emoji",
     };
   }
 
