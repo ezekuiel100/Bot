@@ -69,4 +69,12 @@ function normalizeFancyText(text) {
   return result.toLowerCase();
 }
 
-module.exports = { normalizeFancyText };
+/**
+ * Junta letras quebradas por espaço, linha, pontuação ou caracteres invisíveis.
+ * Ex.: "G\\nR\\nU\\nP\\nO\\nS" e "g.r.u.p.o.s" -> "grupos"
+ */
+function compactForWordMatch(text) {
+  return normalizeFancyText(text).replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+module.exports = { normalizeFancyText, compactForWordMatch };

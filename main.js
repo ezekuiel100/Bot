@@ -1,6 +1,6 @@
 const { DatabaseSync } = require("node:sqlite");
 const TelegramBot = require("node-telegram-bot-api");
-const { normalizeFancyText } = require("./normalizeFancyText");
+const { normalizeFancyText, compactForWordMatch } = require("./normalizeFancyText");
 
 const database = new DatabaseSync("/app/data/database.db");
 
@@ -126,12 +126,13 @@ bot.on("message", async (msg) => {
 
   DeleteforwardMessage(msg);
 
-  const content = normalizeFancyText(msg.text || msg.caption || "");
+  const rawContent = msg.text || msg.caption || "";
+  const content = compactForWordMatch(rawContent);
   if (content) {
     const proibidas = getProibidas();
 
     for (const palavra of proibidas) {
-      const banned = normalizeFancyText(palavra);
+      const banned = compactForWordMatch(palavra);
       if (banned && content.includes(banned)) {
         console.log("Palavra proibida detectada:", banned);
         insertLog("palavra_proibida", msg);
