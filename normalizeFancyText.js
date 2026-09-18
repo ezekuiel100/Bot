@@ -166,11 +166,7 @@ function matchesBannedWord(text, palavra) {
   const tokens = messageTokens(text);
   if (tokens.some((tok) => tok === banned)) return banned;
 
-  if (joinedSingleLetterRuns(tokens).some((run) => run.includes(banned))) {
-    return banned;
-  }
-
-  if (banned.length >= 4 && tokens.some((tok) => tok.includes(banned))) {
+  if (joinedSingleLetterRuns(tokens).some((run) => run === banned)) {
     return banned;
   }
 
