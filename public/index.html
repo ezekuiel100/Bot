@@ -128,11 +128,10 @@
 
         <!-- Log Table -->
         <div class="bg-slate-800 rounded-3xl overflow-x-auto">
-          <table class="w-full min-w-[900px]">
+          <table class="w-full min-w-[760px]">
             <thead>
               <tr class="border-b border-slate-700">
                 <th class="text-left py-5 px-6 font-medium text-slate-400 w-28 shrink-0">HORA</th>
-                <th class="text-left py-5 px-4 font-medium text-slate-400 w-32 shrink-0">TIPO</th>
                 <th class="text-left py-5 px-4 font-medium text-slate-400 w-32 shrink-0">USUÁRIO</th>
                 <th class="text-left py-5 px-4 font-medium text-slate-400">MENSAGEM</th>
                 <th class="sticky right-0 z-10 bg-slate-800 text-right py-5 px-4 font-medium text-slate-400 w-52 shrink-0">AÇÕES</th>
@@ -292,13 +291,6 @@
       }
 
       // ============ LOGS ============
-      const ACTION_META = {
-        palavra_proibida: { label: "Palavra proibida", color: "text-red-400 bg-red-500/10",      icon: "fa-comment-slash" },
-        link:             { label: "Link",             color: "text-orange-400 bg-orange-500/10", icon: "fa-link" },
-        encaminhamento:   { label: "Encaminhamento",   color: "text-yellow-400 bg-yellow-500/10", icon: "fa-share" },
-        nude:             { label: "Imagem imprópria", color: "text-pink-400 bg-pink-500/10",     icon: "fa-eye-slash" },
-      };
-
       async function loadLogs() {
         try {
           const res = await fetch(`${API_URL}/logs`);
@@ -315,11 +307,10 @@
         const tbody = document.getElementById("logList");
         tbody.innerHTML = "";
         if (logs.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" class="text-center py-16 text-slate-500">Nenhuma ação registrada</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="4" class="text-center py-16 text-slate-500">Nenhuma ação registrada</td></tr>`;
           return;
         }
         logs.forEach((log) => {
-          const meta = ACTION_META[log.action] || { label: log.action, color: "text-slate-400 bg-slate-500/10", icon: "fa-circle" };
           const time = new Date(log.timestamp).toLocaleString("pt-BR", {
             day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
           });
@@ -329,14 +320,6 @@
           const tdTime = document.createElement("td");
           tdTime.className = "px-6 py-4 text-sm text-slate-400 font-mono";
           tdTime.textContent = time;
-
-          const tdType = document.createElement("td");
-          tdType.className = "px-4 py-4";
-          const badge = document.createElement("span");
-          badge.className = `${meta.color} px-3 py-1 rounded-xl text-sm font-medium`;
-          badge.innerHTML = `<i class="fas ${meta.icon} mr-1"></i>`;
-          badge.appendChild(document.createTextNode(meta.label));
-          tdType.appendChild(badge);
 
           const tdUser = document.createElement("td");
           tdUser.className = "px-4 py-4 text-sm text-slate-300";
@@ -366,7 +349,7 @@
             tdAction.appendChild(actions);
           }
 
-          row.append(tdTime, tdType, tdUser, tdMsg, tdAction);
+          row.append(tdTime, tdUser, tdMsg, tdAction);
           tbody.appendChild(row);
         });
       }
