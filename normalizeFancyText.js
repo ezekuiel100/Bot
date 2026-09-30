@@ -159,14 +159,22 @@ function matchesBannedWord(text, palavra) {
   const banned = compactForWordMatch(palavra);
   if (!isUsableBannedCompact(banned)) return null;
 
+  const normalizedText = normalizeFancyText(text);
+
   if (hasEmoji(banned)) {
-    return compactForWordMatch(text).includes(banned) ? banned : null;
+    return compactForWordMatch(normalizedText).includes(banned) ? banned : null;
   }
 
-  const tokens = messageTokens(text);
+  const tokens = messageTokens(normalizedText);
   if (tokens.some((tok) => tok === banned)) return banned;
 
   if (joinedSingleLetterRuns(tokens).some((run) => run === banned)) {
+    return banned;
+  }
+
+  // Frases são comparadas no texto normalizado para preservar os espaços.
+  // Assim, "tenho GP" também é detectado, sem liberar variantes tipográficas.
+  if (banned.includes(" ") && normalizedText.includes(normalizeFancyText(palavra).trim())) {
     return banned;
   }
 
