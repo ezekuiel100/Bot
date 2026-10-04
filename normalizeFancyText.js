@@ -85,7 +85,26 @@ function mapFancyChar(char) {
 function normalizeFancyText(text) {
   let result = "";
 
-  for (const char of String(text)) {
+  const chars = [...String(text)];
+
+  for (let index = 0; index < chars.length; index += 1) {
+    const char = chars[index];
+
+    // Mantém o ZWJ apenas quando ele realmente conecta partes de um emoji.
+    // Entre letras, ele é um caractere invisível usado para contornar filtros.
+    if (char.codePointAt(0) === 0x200d) {
+      const previous = chars[index - 1];
+      const next = chars[index + 1];
+      if (previous && next && isEmojiRelated(previous) && isEmojiRelated(next)) {
+        result += char;
+      }
+      continue;
+    }
+
+    // Remove caracteres Unicode de formatação invisíveis (zero-width space,
+    // zero-width non-joiner, word joiner etc.) para impedir evasões.
+    if (/\p{Cf}/u.test(char)) continue;
+
     if (isEmojiRelated(char)) {
       result += char;
       continue;
@@ -169,6 +188,8 @@ function containsTokenSequence(tokens, expectedTokens) {
 }
 
 function matchesBannedWord(text, palavra) {
+  if (palavra === null || palavra === undefined) return null;
+
   const banned = compactForWordMatch(palavra);
   if (!isUsableBannedCompact(banned)) return null;
 

@@ -4,6 +4,7 @@
   "description": "",
   "main": "main.js",
   "scripts": {
+    "test": "node --test",
     "dev": "concurrently \"node --env-file=.env --watch main.js\" \"node --env-file=.env server.js\"",
     "start": "concurrently \"node --env-file=.env main.js\" \"node --env-file=.env server.js\""
   },
