@@ -11,9 +11,24 @@ const database = new DatabaseSync("/app/data/database.db");
 
 const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
 
-const bot = new TelegramBot(telegramBotToken, { polling: true });
+const bot = new TelegramBot(telegramBotToken, {
+  polling: {
+    params: {
+      allowed_updates: ["message", "message_reaction"],
+    },
+  },
+});
 
 bot.on("polling_error", (err) => console.error("Polling error:", err.message));
+
+bot
+  .setMyCommands([
+    {
+      command: "report",
+      description: "Denunciar a mensagem respondida",
+    },
+  ])
+  .catch((err) => console.error("Erro ao cadastrar comando:", err.message));
 
 let linkAlert = "PROIBIDO LINKS NO GRUPO!";
 let forwardMessageAlert = "PROIBIDO ENCAMINHA MENSAGEM";
@@ -87,6 +102,27 @@ database.exec(`CREATE TABLE IF NOT EXISTS reports (
 ) STRICT
 `);
 
+database.exec(`CREATE TABLE IF NOT EXISTS reaction_reports (
+  chat_id INTEGER NOT NULL,
+  message_id INTEGER NOT NULL,
+  reporter_id INTEGER NOT NULL,
+  target_user_id INTEGER,
+  timestamp INTEGER NOT NULL,
+  PRIMARY KEY (chat_id, message_id, reporter_id)
+) STRICT
+`);
+
+database.exec(`CREATE TABLE IF NOT EXISTS postagens_conhecidas (
+  chat_id INTEGER NOT NULL,
+  message_id INTEGER NOT NULL,
+  user_id INTEGER,
+  sender_chat_id INTEGER,
+  username TEXT,
+  message_text TEXT,
+  PRIMARY KEY (chat_id, message_id)
+) STRICT
+`);
+
 database.exec(`CREATE TABLE IF NOT EXISTS reportadores_autorizados (
   chat_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
@@ -106,6 +142,90 @@ database.exec(`CREATE TABLE IF NOT EXISTS membros_conhecidos (
   PRIMARY KEY (chat_id, user_id)
 ) STRICT
 `);
+
+const REPORT_REACTION = "🚨";
+
+function reactionListHasReport(reactions = []) {
+  return reactions.some(
+    (reaction) => reaction.type === "emoji" && reaction.emoji === REPORT_REACTION,
+  );
+}
+
+function trackReportableMessage(msg) {
+  if (
+    (msg.chat.type !== "group" && msg.chat.type !== "supergroup") ||
+    msg.new_chat_members ||
+    msg.left_chat_member
+  ) {
+    return;
+  }
+
+  try {
+    const username =
+      msg.from?.username || msg.from?.first_name || "desconhecido";
+    const text = (msg.text || msg.caption || "[mídia]").slice(0, 200);
+    database
+      .prepare(
+        `INSERT OR REPLACE INTO postagens_conhecidas
+          (chat_id, message_id, user_id, sender_chat_id, username, message_text)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        msg.chat.id,
+        msg.message_id,
+        msg.from?.id ?? null,
+        msg.sender_chat?.id ?? null,
+        username,
+        text,
+      );
+  } catch (err) {
+    console.error("Erro ao registrar postagem:", err.message);
+  }
+}
+
+function countMessageReports(chatId, messageId) {
+  return database
+    .prepare(
+      `SELECT COUNT(*) AS total
+       FROM (
+         SELECT reporter_id FROM reports WHERE chat_id = ? AND message_id = ?
+         UNION
+         SELECT reporter_id FROM reaction_reports WHERE chat_id = ? AND message_id = ?
+       )`,
+    )
+    .get(chatId, messageId, chatId, messageId).total;
+}
+
+function clearMessageReports(chatId, messageId) {
+  database
+    .prepare("DELETE FROM reports WHERE chat_id = ? AND message_id = ?")
+    .run(chatId, messageId);
+  database
+    .prepare("DELETE FROM reaction_reports WHERE chat_id = ? AND message_id = ?")
+    .run(chatId, messageId);
+  database
+    .prepare("DELETE FROM postagens_conhecidas WHERE chat_id = ? AND message_id = ?")
+    .run(chatId, messageId);
+}
+
+function insertReactionRemovalLog(post, chatId) {
+  try {
+    database
+      .prepare(
+        "INSERT INTO logs (timestamp, action, user_id, username, message_text, chat_id) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        Date.now(),
+        "removida_por_reports",
+        post.user_id,
+        post.username,
+        post.message_text,
+        chatId,
+      );
+  } catch (err) {
+    console.error("Erro ao inserir log de denúncia:", err.message);
+  }
+}
 
 function trackKnownMember(msg) {
   if (
@@ -221,7 +341,7 @@ bot.onText(/\/permitirreport(?:@\w+)?(?:\s|$)/i, async (msg) => {
     .run(chatId, target.id, username, Date.now());
 
   await bot
-    .sendMessage(chatId, `${username} agora pode registrar denúncias válidas.`)
+    .sendMessage(chatId, `${username} agora pode denunciar postagens usando a reação 🚨.`)
     .catch((err) => console.error("Erro ao confirmar permissão:", err.message));
 });
 
@@ -250,10 +370,80 @@ bot.onText(/\/removerreport(?:@\w+)?(?:\s|$)/i, async (msg) => {
   database
     .prepare("DELETE FROM reports WHERE chat_id = ? AND reporter_id = ?")
     .run(chatId, target.id);
+  database
+    .prepare("DELETE FROM reaction_reports WHERE chat_id = ? AND reporter_id = ?")
+    .run(chatId, target.id);
 
   await bot
     .sendMessage(chatId, `${username} não pode mais registrar denúncias válidas.`)
     .catch((err) => console.error("Erro ao confirmar remoção:", err.message));
+});
+
+bot.on("message_reaction", async (update) => {
+  const chatId = update.chat.id;
+  const reporter = update.user;
+  const hadReport = reactionListHasReport(update.old_reaction);
+  const hasReport = reactionListHasReport(update.new_reaction);
+
+  if (!reporter || reporter.is_bot || hadReport === hasReport) return;
+
+  const isAuthorized = database
+    .prepare(
+      "SELECT 1 FROM reportadores_autorizados WHERE chat_id = ? AND user_id = ?",
+    )
+    .get(chatId, reporter.id);
+  if (!isAuthorized) return;
+
+  if (!hasReport) {
+    database
+      .prepare(
+        "DELETE FROM reaction_reports WHERE chat_id = ? AND message_id = ? AND reporter_id = ?",
+      )
+      .run(chatId, update.message_id, reporter.id);
+    return;
+  }
+
+  const post = database
+    .prepare(
+      "SELECT * FROM postagens_conhecidas WHERE chat_id = ? AND message_id = ?",
+    )
+    .get(chatId, update.message_id);
+  if (!post || post.user_id === reporter.id) return;
+
+  const admins = await GetGroupAdmins({ chat: update.chat });
+  const isAdminPost =
+    post.sender_chat_id === chatId ||
+    (post.user_id !== null && admins.includes(post.user_id));
+  if (isAdminPost) return;
+
+  try {
+    const result = database
+      .prepare(
+        "INSERT OR IGNORE INTO reaction_reports (chat_id, message_id, reporter_id, target_user_id, timestamp) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(chatId, update.message_id, reporter.id, post.user_id, Date.now());
+    if (result.changes === 0) return;
+
+    const total = countMessageReports(chatId, update.message_id);
+    if (total >= REPORT_THRESHOLD) {
+      await bot.deleteMessage(chatId, update.message_id);
+      clearMessageReports(chatId, update.message_id);
+      insertReactionRemovalLog(post, chatId);
+      await bot.sendMessage(
+        chatId,
+        `Postagem removida após ${total} denúncias 🚨.`,
+      );
+      return;
+    }
+
+    await bot.sendMessage(
+      chatId,
+      `🚨 Denúncia registrada (${total}/${REPORT_THRESHOLD}).`,
+      { reply_to_message_id: update.message_id },
+    );
+  } catch (err) {
+    console.error("Erro ao processar reação de denúncia:", err.message);
+  }
 });
 
 bot.onText(/\/report(?:@\w+)?(?:\s|$)/i, async (msg) => {
@@ -333,17 +523,13 @@ bot.onText(/\/report(?:@\w+)?(?:\s|$)/i, async (msg) => {
       return;
     }
 
-    const report = database
-      .prepare(
-        "SELECT COUNT(*) AS total FROM reports WHERE chat_id = ? AND message_id = ?",
-      )
-      .get(chatId, target.message_id);
+    const report = {
+      total: countMessageReports(chatId, target.message_id),
+    };
 
     if (report.total >= REPORT_THRESHOLD) {
       await bot.deleteMessage(chatId, target.message_id);
-      database
-        .prepare("DELETE FROM reports WHERE chat_id = ? AND message_id = ?")
-        .run(chatId, target.message_id);
+      clearMessageReports(chatId, target.message_id);
       insertLog("removida_por_reports", target);
       await bot.sendMessage(
         chatId,
@@ -376,6 +562,7 @@ bot.on("message", async (msg) => {
 
 
   trackKnownMember(msg);
+  trackReportableMessage(msg);
 
   if (msg.new_chat_members) {
     bot.deleteMessage(chatId, messageId).catch((err) => {

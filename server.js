@@ -260,6 +260,21 @@ fastify.post("/reportadores", async (request, reply) => {
     "INSERT OR REPLACE INTO reportadores_autorizados (chat_id, user_id, username, authorized_at) VALUES (?, ?, ?, ?)",
   ).run(chatId, userId, name, Date.now());
 
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (token) {
+    const visibleName = member.username ? `@${member.username}` : member.first_name || name;
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: `✅ ${visibleName} agora pode denunciar postagens usando a reação 🚨.`,
+      }),
+    }).catch((err) =>
+      request.log.error(err, "Erro ao avisar autorização no grupo"),
+    );
+  }
+
   return { success: true, message: `${name} foi autorizado a denunciar` };
 });
 
@@ -281,6 +296,9 @@ fastify.delete("/reportadores/:chatId/:userId", async (request, reply) => {
     chatId,
     userId,
   );
+  db.prepare(
+    "DELETE FROM reaction_reports WHERE chat_id = ? AND reporter_id = ?",
+  ).run(chatId, userId);
 
   if (result.changes === 0) {
     reply.code(404);
