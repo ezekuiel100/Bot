@@ -155,26 +155,42 @@ function joinedSingleLetterRuns(tokens) {
   return runs;
 }
 
+function containsTokenSequence(tokens, expectedTokens) {
+  if (expectedTokens.length > tokens.length) return false;
+
+  for (let start = 0; start <= tokens.length - expectedTokens.length; start += 1) {
+    const matches = expectedTokens.every(
+      (expected, offset) => tokens[start + offset] === expected,
+    );
+    if (matches) return true;
+  }
+
+  return false;
+}
+
 function matchesBannedWord(text, palavra) {
   const banned = compactForWordMatch(palavra);
   if (!isUsableBannedCompact(banned)) return null;
 
   const normalizedText = normalizeFancyText(text);
+  const tokens = messageTokens(normalizedText);
+  const bannedTokens = messageTokens(palavra);
+
+  // Uma regra com mais de um termo é uma frase. A comparação por tokens
+  // preserva seus limites e aceita espaços, quebras de linha ou pontuação.
+  if (bannedTokens.length > 1) {
+    return containsTokenSequence(tokens, bannedTokens)
+      ? bannedTokens.join(" ")
+      : null;
+  }
 
   if (hasEmoji(banned)) {
     return compactForWordMatch(normalizedText).includes(banned) ? banned : null;
   }
 
-  const tokens = messageTokens(normalizedText);
   if (tokens.some((tok) => tok === banned)) return banned;
 
   if (joinedSingleLetterRuns(tokens).some((run) => run === banned)) {
-    return banned;
-  }
-
-  // Frases são comparadas no texto normalizado para preservar os espaços.
-  // Assim, "tenho GP" também é detectado, sem liberar variantes tipográficas.
-  if (banned.includes(" ") && normalizedText.includes(normalizeFancyText(palavra).trim())) {
     return banned;
   }
 
