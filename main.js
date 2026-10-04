@@ -208,6 +208,29 @@ function clearMessageReports(chatId, messageId) {
     .run(chatId, messageId);
 }
 
+async function restrictReportedUser(chatId, userId, username) {
+  if (!userId) return false;
+
+  const untilDate = Math.floor(Date.now() / 1000) + 60 * 60;
+  await bot.restrictChatMember(chatId, userId, {
+    can_send_messages: false,
+    until_date: untilDate,
+  });
+
+  database
+    .prepare(
+      "INSERT INTO restricoes (timestamp, user_id, username, reason, chat_id) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run(
+      Date.now(),
+      userId,
+      username || "desconhecido",
+      "Limite de denúncias atingido (1 hora)",
+      chatId,
+    );
+  return true;
+}
+
 function insertReactionRemovalLog(post, chatId) {
   try {
     database
@@ -427,11 +450,18 @@ bot.on("message_reaction", async (update) => {
     const total = countMessageReports(chatId, update.message_id);
     if (total >= REPORT_THRESHOLD) {
       await bot.deleteMessage(chatId, update.message_id);
+      const restricted = await restrictReportedUser(
+        chatId,
+        post.user_id,
+        post.username,
+      );
       clearMessageReports(chatId, update.message_id);
       insertReactionRemovalLog(post, chatId);
       await bot.sendMessage(
         chatId,
-        `Postagem removida após ${total} denúncias 🚨.`,
+        restricted
+          ? `Postagem removida após ${total} denúncias 🚨. O autor foi restringido por 1 hora.`
+          : `Postagem removida após ${total} denúncias 🚨.`,
       );
       return;
     }
@@ -529,11 +559,18 @@ bot.onText(/\/report(?:@\w+)?(?:\s|$)/i, async (msg) => {
 
     if (report.total >= REPORT_THRESHOLD) {
       await bot.deleteMessage(chatId, target.message_id);
+      const restricted = await restrictReportedUser(
+        chatId,
+        targetUserId,
+        target.from?.username || target.from?.first_name,
+      );
       clearMessageReports(chatId, target.message_id);
       insertLog("removida_por_reports", target);
       await bot.sendMessage(
         chatId,
-        `Postagem removida após ${report.total} denúncias.`,
+        restricted
+          ? `Postagem removida após ${report.total} denúncias. O autor foi restringido por 1 hora.`
+          : `Postagem removida após ${report.total} denúncias.`,
       );
       return;
     }
