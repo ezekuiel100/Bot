@@ -124,15 +124,23 @@ bot.on("message", async (msg) => {
     bot.deleteMessage(chatId, messageId).catch((err) => {
       console.error("Erro ao apagar mensagem:", err);
     });
+    return;
   }
 
   if (msg.left_chat_member) {
     bot.deleteMessage(chatId, messageId).catch((err) => {
       console.error("Erro ao apagar mensagem de saída:", err);
     });
+    return;
   }
 
-  DeleteforwardMessage(msg);
+  // Cada mensagem segue apenas a primeira regra aplicável nesta prioridade:
+  // encaminhamento, palavra proibida e link.
+  if (messageIsForwarded(msg)) {
+    insertLog("encaminhamento", msg);
+    DeleteGroupMessage(msg, forwardMessageAlert);
+    return;
+  }
 
   const rawContent = msg.text || msg.caption || "";
   if (rawContent) {
@@ -154,7 +162,6 @@ bot.on("message", async (msg) => {
     insertLog("link", msg);
     DeleteGroupMessage(msg, linkAlert);
     restrictChatMember(msg, 500000, "Envio de link proibido");
-    return;
   }
 });
 
@@ -217,9 +224,12 @@ function restrictChatMember(msg, duration = 86400, reason = "Motivo não informa
     .catch((err) => console.error("Erro ao restringir membro:", err.message));
 }
 
-function DeleteforwardMessage(msg) {
-  if (msg.forward_from_chat) {
-    insertLog("encaminhamento", msg);
-    DeleteGroupMessage(msg, forwardMessageAlert);
-  }
+function messageIsForwarded(msg) {
+  return Boolean(
+    msg.forward_origin ||
+      msg.forward_from ||
+      msg.forward_from_chat ||
+      msg.forward_sender_name ||
+      msg.forward_date,
+  );
 }
