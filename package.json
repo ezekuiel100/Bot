@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "dev": "concurrently \"node --env-file=.env --watch main.js\" \"node --env-file=.env server.js\"",
-    "start": "concurrently \"node main.js\" \"node server.js\""
+    "start": "concurrently \"node --env-file=.env main.js\" \"node --env-file=.env server.js\""
   },
   "keywords": [],
   "author": "",

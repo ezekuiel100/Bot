@@ -1,4 +1,5 @@
 const path = require("node:path");
+const crypto = require("node:crypto");
 const fastify = require("fastify")({ logger: true });
 const cors = require("@fastify/cors");
 const { DatabaseSync } = require("node:sqlite");
@@ -42,6 +43,55 @@ db.exec(`
     chat_id INTEGER NOT NULL
   ) STRICT;
 `);
+
+// ====================== AUTENTICAÇÃO ======================
+const adminUsername = process.env.ADMIN_USERNAME || "admin";
+const adminPassword = process.env.ADMIN_PASSWORD;
+
+if (!adminPassword) {
+  throw new Error(
+    "ADMIN_PASSWORD não configurada. Defina uma senha forte para iniciar o painel.",
+  );
+}
+
+function safeEqual(left, right) {
+  const leftBuffer = Buffer.from(String(left));
+  const rightBuffer = Buffer.from(String(right));
+
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+fastify.addHook("onRequest", async (request, reply) => {
+  // Preflight CORS não carrega credenciais e não executa ações administrativas.
+  if (request.method === "OPTIONS") return;
+
+  const authorization = request.headers.authorization;
+  if (!authorization?.startsWith("Basic ")) {
+    return reply
+      .header("WWW-Authenticate", 'Basic realm="Painel administrativo", charset="UTF-8"')
+      .code(401)
+      .send({ success: false, error: "Autenticação obrigatória" });
+  }
+
+  let credentials;
+  try {
+    credentials = Buffer.from(authorization.slice(6), "base64").toString("utf8");
+  } catch {
+    credentials = "";
+  }
+
+  const separatorIndex = credentials.indexOf(":");
+  const username = separatorIndex >= 0 ? credentials.slice(0, separatorIndex) : "";
+  const password = separatorIndex >= 0 ? credentials.slice(separatorIndex + 1) : "";
+
+  if (!safeEqual(username, adminUsername) || !safeEqual(password, adminPassword)) {
+    return reply
+      .header("WWW-Authenticate", 'Basic realm="Painel administrativo", charset="UTF-8"')
+      .code(401)
+      .send({ success: false, error: "Credenciais inválidas" });
+  }
+});
 
 // ====================== CORS ======================
 fastify.register(cors, {
