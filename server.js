@@ -44,6 +44,28 @@ db.exec(`
   ) STRICT;
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS reportadores_autorizados (
+    chat_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    username TEXT,
+    authorized_at INTEGER NOT NULL,
+    PRIMARY KEY (chat_id, user_id)
+  ) STRICT;
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS membros_conhecidos (
+    chat_id INTEGER NOT NULL,
+    chat_title TEXT,
+    user_id INTEGER NOT NULL,
+    username TEXT,
+    first_name TEXT,
+    last_seen_at INTEGER NOT NULL,
+    PRIMARY KEY (chat_id, user_id)
+  ) STRICT;
+`);
+
 // ====================== AUTENTICAÇÃO ======================
 const adminUsername = process.env.ADMIN_USERNAME || "admin";
 const adminPassword = process.env.ADMIN_PASSWORD;
@@ -180,6 +202,92 @@ fastify.delete("/palavras/:key", async (request, reply) => {
 fastify.get("/palavras/count", async () => {
   const stmt = db.prepare("SELECT COUNT(*) as total FROM proibidas");
   return stmt.get();
+});
+
+// ====================== REPORTADORES ======================
+
+fastify.get("/membros", async () => {
+  const data = db
+    .prepare(
+      `SELECT m.chat_id, m.chat_title, m.user_id, m.username, m.first_name,
+              m.last_seen_at,
+              CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS autorizado
+       FROM membros_conhecidos m
+       LEFT JOIN reportadores_autorizados r
+         ON r.chat_id = m.chat_id AND r.user_id = m.user_id
+       ORDER BY m.chat_title COLLATE NOCASE, m.first_name COLLATE NOCASE`,
+    )
+    .all();
+  return { success: true, total: data.length, data };
+});
+
+fastify.get("/reportadores", async () => {
+  const data = db
+    .prepare(
+      `SELECT r.chat_id, r.user_id, r.username, r.authorized_at,
+              m.chat_title, m.first_name
+       FROM reportadores_autorizados r
+       LEFT JOIN membros_conhecidos m
+         ON m.chat_id = r.chat_id AND m.user_id = r.user_id
+       ORDER BY m.chat_title COLLATE NOCASE, COALESCE(m.first_name, r.username) COLLATE NOCASE`,
+    )
+    .all();
+  return { success: true, total: data.length, data };
+});
+
+fastify.post("/reportadores", async (request, reply) => {
+  const chatId = Number(request.body?.chat_id);
+  const userId = Number(request.body?.user_id);
+
+  if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(userId)) {
+    reply.code(400);
+    return { success: false, error: "Grupo e usuário são obrigatórios" };
+  }
+
+  const member = db
+    .prepare(
+      "SELECT username, first_name FROM membros_conhecidos WHERE chat_id = ? AND user_id = ?",
+    )
+    .get(chatId, userId);
+
+  if (!member) {
+    reply.code(404);
+    return { success: false, error: "Usuário não encontrado nesse grupo" };
+  }
+
+  const name = member.username || member.first_name || `Usuário ${userId}`;
+  db.prepare(
+    "INSERT OR REPLACE INTO reportadores_autorizados (chat_id, user_id, username, authorized_at) VALUES (?, ?, ?, ?)",
+  ).run(chatId, userId, name, Date.now());
+
+  return { success: true, message: `${name} foi autorizado a denunciar` };
+});
+
+fastify.delete("/reportadores/:chatId/:userId", async (request, reply) => {
+  const chatId = Number(request.params.chatId);
+  const userId = Number(request.params.userId);
+
+  if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(userId)) {
+    reply.code(400);
+    return { success: false, error: "Grupo ou usuário inválido" };
+  }
+
+  const result = db
+    .prepare(
+      "DELETE FROM reportadores_autorizados WHERE chat_id = ? AND user_id = ?",
+    )
+    .run(chatId, userId);
+  db.prepare("DELETE FROM reports WHERE chat_id = ? AND reporter_id = ?").run(
+    chatId,
+    userId,
+  );
+
+  if (result.changes === 0) {
+    reply.code(404);
+    return { success: false, error: "Essa pessoa não estava autorizada" };
+  }
+
+  return { success: true, message: "Permissão de denúncia removida" };
 });
 
 // ====================== LOGS ======================
