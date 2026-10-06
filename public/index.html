@@ -171,17 +171,38 @@
         <div class="bg-slate-800 rounded-3xl p-6 mb-6">
           <h2 class="text-xl font-semibold mb-2">Autorizar denúncias</h2>
           <p class="text-slate-400 text-sm mb-5">
-            Escolha um grupo e um membro já identificado pelo bot.
+            Escolha um grupo e um membro já identificado pelo bot, ou adicione pelo ID.
           </p>
+          <select id="reporterGroup" onchange="renderReporterMembers()"
+            class="w-full bg-slate-900 border border-slate-700 rounded-2xl px-5 py-3 mb-4 focus:outline-none focus:border-blue-500"></select>
           <div class="grid md:grid-cols-[1fr_1fr_auto] gap-4">
-            <select id="reporterGroup" onchange="renderReporterMembers()"
-              class="bg-slate-900 border border-slate-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-blue-500"></select>
+            <div class="relative">
+              <input id="reporterSearch" type="text" placeholder="Buscar nome, @usuário ou ID..."
+                class="w-full bg-slate-900 border border-slate-700 rounded-2xl px-5 py-3 pl-12 focus:outline-none focus:border-blue-500"
+                oninput="renderReporterMembers()" />
+              <i class="fas fa-search absolute left-4 top-4 text-slate-500"></i>
+            </div>
             <select id="reporterMember"
               class="bg-slate-900 border border-slate-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-blue-500"></select>
             <button onclick="authorizeReporter()"
               class="bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-2xl font-semibold transition">
               <i class="fas fa-user-check mr-2"></i>Autorizar
             </button>
+          </div>
+          <div class="border-t border-slate-700 mt-6 pt-6">
+            <h3 class="font-semibold mb-1">Adicionar manualmente</h3>
+            <p class="text-slate-400 text-sm mb-4">
+              Para quem o bot ainda não viu falar. Informe o ID numérico do Telegram (ou um @usuário que o bot já conheça de outro grupo).
+            </p>
+            <div class="grid md:grid-cols-[1fr_auto] gap-4">
+              <input id="reporterManual" type="text" placeholder="Ex.: 123456789 ou @usuario"
+                class="bg-slate-900 border border-slate-700 rounded-2xl px-5 py-3 focus:outline-none focus:border-blue-500"
+                onkeypress="if (event.key === 'Enter') authorizeManualReporter();" />
+              <button onclick="authorizeManualReporter()"
+                class="bg-slate-700 hover:bg-slate-600 px-6 py-3 rounded-2xl font-semibold transition">
+                <i class="fas fa-user-plus mr-2"></i>Adicionar
+              </button>
+            </div>
           </div>
         </div>
         <div class="bg-slate-800 rounded-3xl overflow-x-auto">
@@ -505,6 +526,7 @@
 
       function renderReporterGroups() {
         const select = document.getElementById("reporterGroup");
+        const previous = select.value;
         const groups = new Map();
         knownMembers.forEach((member) => groups.set(String(member.chat_id), member.chat_title || member.chat_id));
         select.innerHTML = "";
@@ -514,21 +536,34 @@
           option.textContent = `${title} (${id})`;
           select.appendChild(option);
         });
+        if (groups.has(previous)) select.value = previous;
         renderReporterMembers();
       }
 
       function renderReporterMembers() {
         const groupId = document.getElementById("reporterGroup").value;
+        const search = document.getElementById("reporterSearch").value.toLowerCase().replace(/^@/, "").trim();
         const select = document.getElementById("reporterMember");
         select.innerHTML = "";
-        knownMembers
-          .filter((member) => String(member.chat_id) === groupId && !member.autorizado)
-          .forEach((member) => {
-            const option = document.createElement("option");
-            option.value = member.user_id;
-            option.textContent = member.username ? `@${member.username}` : `${member.first_name || "Sem nome"} (#${member.user_id})`;
-            select.appendChild(option);
-          });
+        const matches = knownMembers.filter((member) =>
+          String(member.chat_id) === groupId && !member.autorizado &&
+          (!search || [member.username, member.first_name, String(member.user_id)]
+            .some((field) => field && field.toLowerCase().includes(search))));
+        if (matches.length === 0) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = search ? "Nenhum membro encontrado" : "Nenhum membro disponível";
+          select.appendChild(option);
+          return;
+        }
+        matches.forEach((member) => {
+          const option = document.createElement("option");
+          option.value = member.user_id;
+          option.textContent = member.username
+            ? `@${member.username}${member.first_name ? ` — ${member.first_name}` : ""}`
+            : `${member.first_name || "Sem nome"} (#${member.user_id})`;
+          select.appendChild(option);
+        });
       }
 
       function renderAuthorizedReporters(reporters) {
@@ -563,6 +598,39 @@
           showToast("Escolha um grupo e um usuário.", "error");
           return;
         }
+        if (await sendReporterAuthorization(chat_id, user_id)) {
+          document.getElementById("reporterSearch").value = "";
+        }
+      }
+
+      async function authorizeManualReporter() {
+        const chat_id = Number(document.getElementById("reporterGroup").value);
+        const input = document.getElementById("reporterManual");
+        const value = input.value.trim();
+        if (!chat_id) {
+          showToast("Escolha um grupo.", "error");
+          return;
+        }
+
+        let user_id = /^\d+$/.test(value) ? Number(value) : 0;
+        if (!user_id && value) {
+          // O Telegram não resolve @usuário para ID; só dá se o bot já viu essa pessoa.
+          const username = value.replace(/^@/, "").toLowerCase();
+          user_id = knownMembers.find((member) => member.username?.toLowerCase() === username)?.user_id || 0;
+          if (!user_id) {
+            showToast("@usuário desconhecido pelo bot. Use o ID numérico.", "error");
+            return;
+          }
+        }
+        if (!user_id) {
+          showToast("Informe o ID numérico ou @usuário.", "error");
+          return;
+        }
+
+        if (await sendReporterAuthorization(chat_id, user_id)) input.value = "";
+      }
+
+      async function sendReporterAuthorization(chat_id, user_id) {
         try {
           const res = await fetch(`${API_URL}/reportadores`, {
             method: "POST",
@@ -570,11 +638,13 @@
             body: JSON.stringify({ chat_id, user_id }),
           });
           const data = await res.json();
-          if (!data.success) { showToast(data.error, "error"); return; }
+          if (!data.success) { showToast(data.error, "error"); return false; }
           showToast(data.message);
           loadReporters();
+          return true;
         } catch {
           showToast("Erro de conexão com a API", "error");
+          return false;
         }
       }
 

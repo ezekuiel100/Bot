@@ -244,15 +244,56 @@ fastify.post("/reportadores", async (request, reply) => {
     return { success: false, error: "Grupo e usuário são obrigatórios" };
   }
 
-  const member = db
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  let member = db
     .prepare(
       "SELECT username, first_name FROM membros_conhecidos WHERE chat_id = ? AND user_id = ?",
     )
     .get(chatId, userId);
 
+  // Adição manual: o bot ainda não viu essa pessoa falar, então confirma no Telegram
+  // que ela está no grupo e registra como membro conhecido.
   if (!member) {
-    reply.code(404);
-    return { success: false, error: "Usuário não encontrado nesse grupo" };
+    if (!token) {
+      reply.code(404);
+      return { success: false, error: "Usuário não encontrado nesse grupo" };
+    }
+
+    let data;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getChatMember`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, user_id: userId }),
+      });
+      data = await res.json();
+    } catch (err) {
+      reply.code(502);
+      return { success: false, error: `Erro ao consultar o Telegram: ${err.message}` };
+    }
+
+    const status = data.result?.status;
+    if (!data.ok || status === "left" || status === "kicked") {
+      reply.code(404);
+      return { success: false, error: "Esse ID não é membro do grupo selecionado" };
+    }
+    if (data.result.user.is_bot) {
+      reply.code(400);
+      return { success: false, error: "Bots não podem ser autorizados" };
+    }
+
+    const chatTitle = db
+      .prepare("SELECT chat_title FROM membros_conhecidos WHERE chat_id = ? LIMIT 1")
+      .get(chatId)?.chat_title ?? null;
+    member = {
+      username: data.result.user.username ?? null,
+      first_name: data.result.user.first_name ?? null,
+    };
+    db.prepare(
+      `INSERT INTO membros_conhecidos
+        (chat_id, chat_title, user_id, username, first_name, last_seen_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(chatId, chatTitle, userId, member.username, member.first_name, Date.now());
   }
 
   const name = member.username || member.first_name || `Usuário ${userId}`;
@@ -260,7 +301,6 @@ fastify.post("/reportadores", async (request, reply) => {
     "INSERT OR REPLACE INTO reportadores_autorizados (chat_id, user_id, username, authorized_at) VALUES (?, ?, ?, ?)",
   ).run(chatId, userId, name, Date.now());
 
-  const token = process.env.TELEGRAM_BOT_TOKEN;
   if (token) {
     const visibleName = member.username ? `@${member.username}` : member.first_name || name;
     fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
