@@ -45,16 +45,6 @@ db.exec(`
 `);
 
 db.exec(`
-  CREATE TABLE IF NOT EXISTS reportadores_autorizados (
-    chat_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    username TEXT,
-    authorized_at INTEGER NOT NULL,
-    PRIMARY KEY (chat_id, user_id)
-  ) STRICT;
-`);
-
-db.exec(`
   CREATE TABLE IF NOT EXISTS membros_conhecidos (
     chat_id INTEGER NOT NULL,
     chat_title TEXT,
@@ -63,6 +53,14 @@ db.exec(`
     first_name TEXT,
     last_seen_at INTEGER NOT NULL,
     PRIMARY KEY (chat_id, user_id)
+  ) STRICT;
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS regras (
+    chat_id INTEGER PRIMARY KEY,
+    texto TEXT NOT NULL,
+    updated_at INTEGER NOT NULL
   ) STRICT;
 `);
 
@@ -204,148 +202,65 @@ fastify.get("/palavras/count", async () => {
   return stmt.get();
 });
 
-// ====================== REPORTADORES ======================
+// ====================== REGRAS ======================
 
-fastify.get("/membros", async () => {
+// Lista todos os grupos conhecidos pelo bot com as regras de cada um (se houver).
+fastify.get("/regras", async () => {
   const data = db
     .prepare(
-      `SELECT m.chat_id, m.chat_title, m.user_id, m.username, m.first_name,
-              m.last_seen_at,
-              CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS autorizado
-       FROM membros_conhecidos m
-       LEFT JOIN reportadores_autorizados r
-         ON r.chat_id = m.chat_id AND r.user_id = m.user_id
-       ORDER BY m.chat_title COLLATE NOCASE, m.first_name COLLATE NOCASE`,
+      `SELECT g.chat_id,
+              (SELECT chat_title FROM membros_conhecidos m
+                WHERE m.chat_id = g.chat_id AND m.chat_title IS NOT NULL LIMIT 1) AS chat_title,
+              r.texto, r.updated_at
+       FROM (SELECT chat_id FROM membros_conhecidos
+             UNION SELECT chat_id FROM regras) g
+       LEFT JOIN regras r ON r.chat_id = g.chat_id
+       ORDER BY chat_title COLLATE NOCASE`,
     )
     .all();
   return { success: true, total: data.length, data };
 });
 
-fastify.get("/reportadores", async () => {
-  const data = db
-    .prepare(
-      `SELECT r.chat_id, r.user_id, r.username, r.authorized_at,
-              m.chat_title, m.first_name
-       FROM reportadores_autorizados r
-       LEFT JOIN membros_conhecidos m
-         ON m.chat_id = r.chat_id AND m.user_id = r.user_id
-       ORDER BY m.chat_title COLLATE NOCASE, COALESCE(m.first_name, r.username) COLLATE NOCASE`,
-    )
-    .all();
-  return { success: true, total: data.length, data };
-});
-
-fastify.post("/reportadores", async (request, reply) => {
-  const chatId = Number(request.body?.chat_id);
-  const userId = Number(request.body?.user_id);
-
-  if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(userId)) {
-    reply.code(400);
-    return { success: false, error: "Grupo e usuário são obrigatórios" };
-  }
-
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  let member = db
-    .prepare(
-      "SELECT username, first_name FROM membros_conhecidos WHERE chat_id = ? AND user_id = ?",
-    )
-    .get(chatId, userId);
-
-  // Adição manual: o bot ainda não viu essa pessoa falar, então confirma no Telegram
-  // que ela está no grupo e registra como membro conhecido.
-  if (!member) {
-    if (!token) {
-      reply.code(404);
-      return { success: false, error: "Usuário não encontrado nesse grupo" };
-    }
-
-    let data;
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/getChatMember`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, user_id: userId }),
-      });
-      data = await res.json();
-    } catch (err) {
-      reply.code(502);
-      return { success: false, error: `Erro ao consultar o Telegram: ${err.message}` };
-    }
-
-    const status = data.result?.status;
-    if (!data.ok || status === "left" || status === "kicked") {
-      reply.code(404);
-      return { success: false, error: "Esse ID não é membro do grupo selecionado" };
-    }
-    if (data.result.user.is_bot) {
-      reply.code(400);
-      return { success: false, error: "Bots não podem ser autorizados" };
-    }
-
-    const chatTitle = db
-      .prepare("SELECT chat_title FROM membros_conhecidos WHERE chat_id = ? LIMIT 1")
-      .get(chatId)?.chat_title ?? null;
-    member = {
-      username: data.result.user.username ?? null,
-      first_name: data.result.user.first_name ?? null,
-    };
-    db.prepare(
-      `INSERT INTO membros_conhecidos
-        (chat_id, chat_title, user_id, username, first_name, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(chatId, chatTitle, userId, member.username, member.first_name, Date.now());
-  }
-
-  const name = member.username || member.first_name || `Usuário ${userId}`;
-  db.prepare(
-    "INSERT OR REPLACE INTO reportadores_autorizados (chat_id, user_id, username, authorized_at) VALUES (?, ?, ?, ?)",
-  ).run(chatId, userId, name, Date.now());
-
-  if (token) {
-    const visibleName = member.username ? `@${member.username}` : member.first_name || name;
-    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: `✅ ${visibleName} agora pode denunciar postagens usando a reação 🚨.`,
-      }),
-    }).catch((err) =>
-      request.log.error(err, "Erro ao avisar autorização no grupo"),
-    );
-  }
-
-  return { success: true, message: `${name} foi autorizado a denunciar` };
-});
-
-fastify.delete("/reportadores/:chatId/:userId", async (request, reply) => {
+fastify.put("/regras/:chatId", async (request, reply) => {
   const chatId = Number(request.params.chatId);
-  const userId = Number(request.params.userId);
+  const texto = String(request.body?.texto ?? "").trim();
 
-  if (!Number.isSafeInteger(chatId) || !Number.isSafeInteger(userId)) {
+  if (!Number.isSafeInteger(chatId)) {
     reply.code(400);
-    return { success: false, error: "Grupo ou usuário inválido" };
+    return { success: false, error: "Grupo inválido" };
+  }
+  if (!texto) {
+    reply.code(400);
+    return { success: false, error: "O texto das regras é obrigatório" };
+  }
+  // Limite de tamanho de mensagem do Telegram, descontando o cabeçalho do /regras.
+  if (texto.length > 4000) {
+    reply.code(400);
+    return { success: false, error: "As regras podem ter no máximo 4000 caracteres" };
   }
 
-  const result = db
-    .prepare(
-      "DELETE FROM reportadores_autorizados WHERE chat_id = ? AND user_id = ?",
-    )
-    .run(chatId, userId);
-  db.prepare("DELETE FROM reports WHERE chat_id = ? AND reporter_id = ?").run(
-    chatId,
-    userId,
-  );
   db.prepare(
-    "DELETE FROM reaction_reports WHERE chat_id = ? AND reporter_id = ?",
-  ).run(chatId, userId);
+    "INSERT OR REPLACE INTO regras (chat_id, texto, updated_at) VALUES (?, ?, ?)",
+  ).run(chatId, texto, Date.now());
 
+  return { success: true, message: "Regras salvas" };
+});
+
+fastify.delete("/regras/:chatId", async (request, reply) => {
+  const chatId = Number(request.params.chatId);
+
+  if (!Number.isSafeInteger(chatId)) {
+    reply.code(400);
+    return { success: false, error: "Grupo inválido" };
+  }
+
+  const result = db.prepare("DELETE FROM regras WHERE chat_id = ?").run(chatId);
   if (result.changes === 0) {
     reply.code(404);
-    return { success: false, error: "Essa pessoa não estava autorizada" };
+    return { success: false, error: "Esse grupo não tinha regras cadastradas" };
   }
 
-  return { success: true, message: "Permissão de denúncia removida" };
+  return { success: true, message: "Regras removidas" };
 });
 
 // ====================== LOGS ======================

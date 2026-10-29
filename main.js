@@ -27,6 +27,10 @@ bot
       command: "report",
       description: "Denunciar a mensagem respondida",
     },
+    {
+      command: "regras",
+      description: "Mostrar as regras do grupo",
+    },
   ])
   .catch((err) => console.error("Erro ao cadastrar comando:", err.message));
 
@@ -36,13 +40,13 @@ let forwardMessageAlert = "PROIBIDO ENCAMINHA MENSAGEM";
 const adminsCache = new Map();
 const ADMINS_TTL = 5 * 60 * 1000;
 const configuredReportThreshold = Number.parseInt(
-  process.env.REPORT_THRESHOLD || "3",
+  process.env.REPORT_THRESHOLD || "5",
   10,
 );
 const REPORT_THRESHOLD =
   Number.isInteger(configuredReportThreshold) && configuredReportThreshold > 0
     ? configuredReportThreshold
-    : 3;
+    : 5;
 
 
 let wordsCache = null;
@@ -123,15 +127,6 @@ database.exec(`CREATE TABLE IF NOT EXISTS postagens_conhecidas (
 ) STRICT
 `);
 
-database.exec(`CREATE TABLE IF NOT EXISTS reportadores_autorizados (
-  chat_id INTEGER NOT NULL,
-  user_id INTEGER NOT NULL,
-  username TEXT,
-  authorized_at INTEGER NOT NULL,
-  PRIMARY KEY (chat_id, user_id)
-) STRICT
-`);
-
 database.exec(`CREATE TABLE IF NOT EXISTS membros_conhecidos (
   chat_id INTEGER NOT NULL,
   chat_title TEXT,
@@ -140,6 +135,13 @@ database.exec(`CREATE TABLE IF NOT EXISTS membros_conhecidos (
   first_name TEXT,
   last_seen_at INTEGER NOT NULL,
   PRIMARY KEY (chat_id, user_id)
+) STRICT
+`);
+
+database.exec(`CREATE TABLE IF NOT EXISTS regras (
+  chat_id INTEGER PRIMARY KEY,
+  texto TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
 ) STRICT
 `);
 
@@ -332,7 +334,7 @@ bot.onText(/\/banir (.+)/, async (msg, match) => {
   }
 });
 
-async function canManageReporters(msg) {
+async function isGroupAdmin(msg) {
   const admins = await GetGroupAdmins(msg);
   return (
     admins.includes(msg.from.id) ||
@@ -340,66 +342,50 @@ async function canManageReporters(msg) {
   );
 }
 
-bot.onText(/\/permitirreport(?:@\w+)?(?:\s|$)/i, async (msg) => {
+bot.onText(/^\/regras(?:@\w+)?(?:\s|$)/i, async (msg) => {
   const chatId = msg.chat.id;
-  const target = msg.reply_to_message?.from;
-
-  if (!(await canManageReporters(msg))) return;
-
-  if (!target || target.is_bot) {
-    await bot
-      .sendMessage(
-        chatId,
-        "Responda à mensagem de um usuário com /permitirreport.",
-      )
-      .catch((err) => console.error("Erro ao responder permissão:", err.message));
-    return;
-  }
-
-  const username = target.username || target.first_name || "sem nome";
-  database
-    .prepare(
-      "INSERT OR REPLACE INTO reportadores_autorizados (chat_id, user_id, username, authorized_at) VALUES (?, ?, ?, ?)",
-    )
-    .run(chatId, target.id, username, Date.now());
+  const regras = database
+    .prepare("SELECT texto FROM regras WHERE chat_id = ?")
+    .get(chatId);
 
   await bot
-    .sendMessage(chatId, `${username} agora pode denunciar postagens usando a reação 🚨.`)
-    .catch((err) => console.error("Erro ao confirmar permissão:", err.message));
+    .sendMessage(
+      chatId,
+      regras
+        ? `📜 Regras do grupo:\n\n${regras.texto}`
+        : "Este grupo ainda não tem regras cadastradas.",
+      { reply_to_message_id: msg.message_id },
+    )
+    .catch((err) => console.error("Erro ao enviar regras:", err.message));
 });
 
-bot.onText(/\/removerreport(?:@\w+)?(?:\s|$)/i, async (msg) => {
+bot.onText(/^\/definirregras(?:@\w+)?(?:\s+([\s\S]+))?$/i, async (msg, match) => {
   const chatId = msg.chat.id;
-  const target = msg.reply_to_message?.from;
 
-  if (!(await canManageReporters(msg))) return;
+  if (msg.chat.type !== "group" && msg.chat.type !== "supergroup") return;
+  if (!(await isGroupAdmin(msg))) return;
 
-  if (!target || target.is_bot) {
+  // Aceita o texto após o comando ou o texto da mensagem respondida.
+  const texto = (match[1] || msg.reply_to_message?.text || "").trim();
+  if (!texto) {
     await bot
       .sendMessage(
         chatId,
-        "Responda à mensagem de um usuário com /removerreport.",
+        "Use /definirregras seguido do texto das regras, ou responda a uma mensagem com as regras.",
       )
-      .catch((err) => console.error("Erro ao responder remoção:", err.message));
+      .catch((err) => console.error("Erro ao responder regras:", err.message));
     return;
   }
 
-  const username = target.username || target.first_name || "sem nome";
   database
     .prepare(
-      "DELETE FROM reportadores_autorizados WHERE chat_id = ? AND user_id = ?",
+      "INSERT OR REPLACE INTO regras (chat_id, texto, updated_at) VALUES (?, ?, ?)",
     )
-    .run(chatId, target.id);
-  database
-    .prepare("DELETE FROM reports WHERE chat_id = ? AND reporter_id = ?")
-    .run(chatId, target.id);
-  database
-    .prepare("DELETE FROM reaction_reports WHERE chat_id = ? AND reporter_id = ?")
-    .run(chatId, target.id);
+    .run(chatId, texto, Date.now());
 
   await bot
-    .sendMessage(chatId, `${username} não pode mais registrar denúncias válidas.`)
-    .catch((err) => console.error("Erro ao confirmar remoção:", err.message));
+    .sendMessage(chatId, "✅ Regras do grupo atualizadas. Use /regras para ver.")
+    .catch((err) => console.error("Erro ao confirmar regras:", err.message));
 });
 
 bot.on("message_reaction", async (update) => {
@@ -409,13 +395,6 @@ bot.on("message_reaction", async (update) => {
   const hasReport = reactionListHasReport(update.new_reaction);
 
   if (!reporter || reporter.is_bot || hadReport === hasReport) return;
-
-  const isAuthorized = database
-    .prepare(
-      "SELECT 1 FROM reportadores_autorizados WHERE chat_id = ? AND user_id = ?",
-    )
-    .get(chatId, reporter.id);
-  if (!isAuthorized) return;
 
   if (!hasReport) {
     database
@@ -499,22 +478,6 @@ bot.onText(/\/report(?:@\w+)?(?:\s|$)/i, async (msg) => {
 
   const reporterId = msg.from.id;
   const targetUserId = target.from?.id ?? null;
-
-  const isAuthorizedReporter = database
-    .prepare(
-      "SELECT 1 FROM reportadores_autorizados WHERE chat_id = ? AND user_id = ?",
-    )
-    .get(chatId, reporterId);
-
-  if (!isAuthorizedReporter) {
-    await bot
-      .sendMessage(
-        chatId,
-        "Sua denúncia não foi contabilizada. Somente usuários autorizados podem denunciar.",
-      )
-      .catch((err) => console.error("Erro ao responder report:", err.message));
-    return;
-  }
 
   if (targetUserId === reporterId) {
     await bot
